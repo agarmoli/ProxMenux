@@ -78,5 +78,6 @@ __pycache__/
 # AppImage Monitor build artifacts (next build / static export)
 AppImage/.next/
 AppImage/out/
+AppImage/dist/
 AppImage/next-env.d.ts
 AppImage/tsconfig.tsbuildinfo

@@ -68,7 +68,26 @@ jobs:
         path: AppImage/dist/*.sha256
         retention-days: 30
 
-    # NOTE (federation branch): the upstream "commit AppImage to main" step is
-    # intentionally removed here so building this branch never pushes binaries
-    # to main/develop. The built AppImage is available as a downloadable run
-    # artifact only.
+    # Federation auto-update: commit the freshly built AppImage + checksum
+    # back to the SAME branch this ran on (never main/develop), so the
+    # one-line installer always serves the latest build. The upstream
+    # "commit to main" behaviour is intentionally not used here.
+    - name: Commit refreshed AppImage to this branch
+      env:
+        BRANCH: ${{ github.ref_name }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        rm -f AppImage/ProxMenux-*.AppImage AppImage/ProxMenux-Monitor.AppImage.sha256
+        cp AppImage/dist/*.AppImage AppImage/
+        cp AppImage/dist/ProxMenux-Monitor.AppImage.sha256 AppImage/
+
+        # dist/ is gitignored, so this stages only the root AppImage + checksum.
+        git add -A AppImage
+        if git diff --cached --quiet; then
+          echo "AppImage unchanged — nothing to commit."
+          exit 0
+        fi
+        git commit -m "build: refresh federation Monitor AppImage [skip ci]"
+        git push origin "HEAD:${BRANCH}"
