@@ -17,6 +17,7 @@ Routes:
   ANY    /api/proxy/<node>/<path>       reverse-proxy to a peer's API
 """
 
+import posixpath
 from concurrent.futures import ThreadPoolExecutor
 
 from flask import Blueprint, current_app, jsonify, request, Response
@@ -62,6 +63,26 @@ def _public_peer(peer):
     """Peer dict without the secret token, safe to return to the client."""
     return {"name": peer["name"], "host": peer["host"],
             "port": peer["port"], "enabled": peer["enabled"]}
+
+
+def _normalize_proxy_path(endpoint):
+    """Validate + normalize a proxied endpoint path.
+
+    Returns (normalized_path, error). Blocks path traversal (`..`) and the
+    non-proxyable allowlist *after* normalizing, so a request like
+    `api/x/../auth/login` cannot smuggle its way past the allowlist and reach
+    /api/auth or /api/federation on the peer. The normalized path (not the raw
+    one) is what gets forwarded.
+    """
+    target_path = "/" + endpoint
+    if ".." in target_path.split("/"):
+        return None, "invalid path"
+    norm = posixpath.normpath(target_path)
+    if not norm.startswith("/"):
+        return None, "invalid path"
+    if any(norm == p or norm.startswith(p + "/") for p in _NON_PROXYABLE_PREFIXES):
+        return None, "endpoint not proxyable"
+    return norm, None
 
 
 # ── Peer management ──────────────────────────────────────────────────────
@@ -212,9 +233,11 @@ def proxy(node, endpoint):
     if not peer["enabled"]:
         return jsonify({"error": "node '{}' is disabled".format(node)}), 409
 
-    target_path = "/" + endpoint
-    if any(target_path.startswith(p) for p in _NON_PROXYABLE_PREFIXES):
-        return jsonify({"error": "endpoint not proxyable"}), 403
+    target_path, err = _normalize_proxy_path(endpoint)
+    if err == "invalid path":
+        return jsonify({"error": err}), 400
+    if err:
+        return jsonify({"error": err}), 403
 
     fwd_headers = {}
     ct = request.headers.get("Content-Type")

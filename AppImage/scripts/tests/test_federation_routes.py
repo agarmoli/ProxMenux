@@ -74,6 +74,32 @@ def test_proxy_refuses_to_proxy_auth_endpoints(client, monkeypatch):
     assert r.status_code == 403
 
 
+def test_normalize_proxy_path_allows_normal_endpoint():
+    norm, err = fed._normalize_proxy_path("api/system")
+    assert err is None
+    assert norm == "/api/system"
+
+
+def test_normalize_proxy_path_blocks_allowlisted_prefixes():
+    for ep in ("api/auth/login", "api/federation/peers", "api/proxy/x/api/system"):
+        _, err = fed._normalize_proxy_path(ep)
+        assert err == "endpoint not proxyable", ep
+
+
+def test_normalize_proxy_path_blocks_traversal_bypass():
+    # `..` must never let the allowlist be bypassed (would normalize to /api/auth)
+    for ep in ("api/x/../auth/login", "../api/auth/login", "api/../api/federation/peers"):
+        _, err = fed._normalize_proxy_path(ep)
+        assert err is not None, ep
+
+
+def test_normalize_proxy_path_prefix_is_segment_anchored():
+    # A path that merely shares a textual prefix must NOT be blocked.
+    norm, err = fed._normalize_proxy_path("api/authentications-report")
+    assert err is None
+    assert norm == "/api/authentications-report"
+
+
 def test_overview_merges_self_and_peer(client, monkeypatch):
     monkeypatch.setattr(
         fed.federation_config, "load_peers",
