@@ -1,9 +1,13 @@
 name: Build ProxMenux Monitor AppImage
 
 on:
+  workflow_dispatch:
+  # federation branch: build on push so a fresh fork (where workflow_dispatch
+  # isn't indexed yet) still produces a downloadable AppImage artifact.
+  push:
+    branches:
+      - feature/federation
 
-  workflow_dispatch:  
-  
 permissions:
   contents: write
   
