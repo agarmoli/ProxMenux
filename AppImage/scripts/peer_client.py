@@ -39,25 +39,45 @@ def _silence_insecure_warning():
         pass
 
 
+def _looks_like_plain_http(exc):
+    # SSL error that specifically means "the server on this port spoke plain
+    # HTTP, not TLS" — as opposed to a cert/verification problem.
+    m = str(exc).upper()
+    return ("WRONG_VERSION_NUMBER" in m or "UNKNOWN_PROTOCOL" in m
+            or "HTTP_REQUEST" in m or "RECORD LAYER" in m)
+
+
+def _do_request(peer, method, path, scheme, h, params, data, timeout):
+    url = "{scheme}://{host}:{port}{path}".format(
+        scheme=scheme, host=peer["host"], port=int(peer["port"]), path=path)
+    verify = _verify_arg(peer) if scheme == "https" else True
+    if verify is False:
+        _silence_insecure_warning()
+    return requests.request(method, url, params=params, data=data,
+                            headers=h, timeout=timeout, verify=verify)
+
+
 def raw_request(peer, method, path, *, params=None, data=None,
                 headers=None, timeout=15):
     """Forward a request to a peer and return the requests.Response.
 
-    Raises requests.exceptions.RequestException on network failure; the
+    Uses the peer's scheme (default https). If https fails because the peer
+    actually serves plain HTTP on that port, it transparently retries over
+    http. Raises requests.exceptions.RequestException on network failure; the
     caller (proxy route) maps that to a 502.
     """
-    url = "https://{host}:{port}{path}".format(
-        host=peer["host"], port=int(peer["port"]), path=path)
     h = {}
     if peer.get("token"):
         h["Authorization"] = "Bearer {}".format(peer["token"])
     if headers:
         h.update(headers)
-    verify = _verify_arg(peer)
-    if verify is False:
-        _silence_insecure_warning()
-    return requests.request(method, url, params=params, data=data,
-                            headers=h, timeout=timeout, verify=verify)
+    scheme = peer.get("scheme") or "https"
+    try:
+        return _do_request(peer, method, path, scheme, h, params, data, timeout)
+    except requests.exceptions.SSLError as exc:
+        if scheme == "https" and _looks_like_plain_http(exc):
+            return _do_request(peer, method, path, "http", h, params, data, timeout)
+        raise
 
 
 def fetch_json(peer, path, *, method="GET", json_body=None, params=None,

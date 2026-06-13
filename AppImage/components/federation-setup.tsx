@@ -80,8 +80,9 @@ export function FederationSetup() {
           Add the other nodes of your Proxmox cluster to view them all from this
           dashboard. On each peer node, open ProxMenux → Settings → generate an API
           token with <strong>full_admin</strong> scope (needed to control VMs
-          remotely), then paste it here. Use the node&apos;s hostname/FQDN so TLS
-          verifies against the cluster CA.
+          remotely), then paste it here. HTTP/HTTPS is auto-detected. A hostname/FQDN
+          verifies TLS against the cluster CA automatically; for an HTTPS node added
+          by IP, also tick &ldquo;Skip TLS verification&rdquo;.
         </p>
 
         {peers.length > 0 && (

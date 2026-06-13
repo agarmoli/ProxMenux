@@ -63,7 +63,8 @@ def _public_peer(peer):
     """Peer dict without the secret token, safe to return to the client."""
     return {"name": peer["name"], "host": peer["host"],
             "port": peer["port"], "enabled": peer["enabled"],
-            "insecure_tls": peer.get("insecure_tls", False)}
+            "insecure_tls": peer.get("insecure_tls", False),
+            "scheme": peer.get("scheme")}
 
 
 def _normalize_proxy_path(endpoint):
@@ -124,9 +125,11 @@ def delete_peer(name):
 @require_auth
 def test_peer():
     data = request.get_json(silent=True) or {}
+    host, scheme = federation_config.split_scheme(data.get("host", ""))
     peer = {
         "name": data.get("name", "test"),
-        "host": data.get("host", ""),
+        "host": host,
+        "scheme": scheme,
         "port": data.get("port", 8008),
         "token": data.get("token", ""),
         "insecure_tls": data.get("insecure_tls", False),

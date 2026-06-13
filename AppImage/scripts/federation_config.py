@@ -22,12 +22,29 @@ def config_path():
     return os.environ.get("PROXMENUX_FEDERATION_CONFIG", DEFAULT_CONFIG_PATH)
 
 
+def split_scheme(raw_host):
+    """Split an optional URL scheme off a host string.
+
+    Returns (bare_host, scheme_or_None). `http://10.0.1.50` -> ("10.0.1.50",
+    "http"); `pve2.lan` -> ("pve2.lan", None). A None scheme means "auto"
+    (try https, fall back to http if the peer speaks plain HTTP).
+    """
+    raw = str(raw_host or "").strip()
+    scheme = None
+    low = raw.lower()
+    if low.startswith("http://"):
+        scheme, raw = "http", raw[7:]
+    elif low.startswith("https://"):
+        scheme, raw = "https", raw[8:]
+    return raw.rstrip("/"), scheme
+
+
 def _validate_peer(peer):
     """Return a normalized peer dict, or raise ValueError."""
     if not isinstance(peer, dict):
         raise ValueError("peer must be an object")
     name = str(peer.get("name") or "").strip()
-    host = str(peer.get("host") or "").strip()
+    host, scheme = split_scheme(peer.get("host"))
     token = str(peer.get("token") or "").strip()
     if not name:
         raise ValueError("name is required")
@@ -41,9 +58,13 @@ def _validate_peer(peer):
         raise ValueError("port must be an integer")
     if not (1 <= port <= 65535):
         raise ValueError("port must be between 1 and 65535")
+    if scheme is None and peer.get("scheme") in ("http", "https"):
+        scheme = peer.get("scheme")
     return {
         "name": name,
         "host": host,
+        # None = auto: try https, fall back to http if the peer serves plain HTTP.
+        "scheme": scheme,
         "port": port,
         "token": token,
         "enabled": bool(peer.get("enabled", True)),
