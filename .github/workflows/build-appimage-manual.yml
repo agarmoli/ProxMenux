@@ -1,12 +1,9 @@
 name: Build ProxMenux Monitor AppImage
 
 on:
+  # Manual rebuilds only (the workflow is registered now). Dispatch with:
+  #   gh workflow run build-appimage-manual.yml --ref feature/federation
   workflow_dispatch:
-  # federation branch: build on push so a fresh fork (where workflow_dispatch
-  # isn't indexed yet) still produces a downloadable AppImage artifact.
-  push:
-    branches:
-      - feature/federation
 
 permissions:
   contents: write

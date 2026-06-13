@@ -60,7 +60,8 @@ MONITOR_SERVICE_FILE="/etc/systemd/system/proxmenux-monitor.service"
 MONITOR_PORT=8008
 
 # Offline installer envs
-REPO_URL="https://github.com/MacRimi/ProxMenux.git"
+REPO_URL="https://github.com/agarmoli/ProxMenux.git"
+REPO_BRANCH="feature/federation"
 TEMP_DIR="/tmp/proxmenux-install-$$"
 
 # Load utility functions
@@ -765,8 +766,8 @@ install_normal_version() {
 
     show_progress $current_step $total_steps "Install ProxMenux repository"
     msg_info "Cloning ProxMenux repositoryy."
-    if ! git clone --depth 1 "$REPO_URL" "$TEMP_DIR" 2>/dev/null; then
-        msg_error "Failed to clone repository from $REPO_URL"
+    if ! git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$TEMP_DIR" 2>/dev/null; then
+        msg_error "Failed to clone repository from $REPO_URL ($REPO_BRANCH)"
         exit 1
     fi
 
