@@ -101,6 +101,18 @@ journalctl -u proxmenux-monitor -n 50
 systemctl restart proxmenux-monitor
 ```
 
+**Cluster federation (multi-node):**
+
+Install ProxMenux on each node of your Proxmox cluster. On one node (the
+"central" node), go to **Settings → Cluster Federation** and add the other
+nodes by hostname + an API token (generated on each peer with `full_admin`
+scope). A new **Cluster** entry (under the *Node* menu) then shows every node
+in one view, and the node selector above the tabs lets you drill into any
+node's full dashboard. Each node still collects its own metrics locally; the
+central node aggregates them over the existing authenticated API (TLS verified
+against the Proxmox cluster CA). The web terminal stays available only on the
+node you are connected to. With no peers configured the dashboard is unchanged.
+
 ---
 
 ## 🧪 Beta Program

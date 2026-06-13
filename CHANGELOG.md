@@ -1,4 +1,12 @@
 
+## 2026-06-13
+
+### Cluster federation — one dashboard for every node of a Proxmox cluster
+
+The Monitor can now aggregate every node of a single Proxmox cluster into one dashboard. Install ProxMenux on each node as usual; on a chosen "central" node, add the other nodes under **Settings → Cluster Federation** (host + an API token generated on each peer with `full_admin` scope). The central node then exposes new `/api/federation/{peers,nodes,overview,vms}` endpoints plus a reverse proxy at `/api/proxy/<node>/<path>`: a **Cluster** view shows per-node CPU/RAM/temperature/health/VM-count cards, and a node selector lets you drill into any node's full existing dashboard (storage, network, hardware, VMs, remote start/stop). Each node keeps collecting its own local metrics; the central node merges them over the existing authenticated API, with TLS verified against the Proxmox cluster CA (`/etc/pve/pve-root-ca.pem`). The web terminal remains local-node only in this version. Fully backward compatible — with no peers configured the dashboard behaves exactly as before.
+
+---
+
 ## 2026-06-02
 
 ### New version ProxMenux v1.2.2 — *Stable consolidation of the v1.2.1.x cycle*
