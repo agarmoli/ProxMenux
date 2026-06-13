@@ -61,20 +61,44 @@ def test_insecure_tls_disables_verification():
     assert rq.call_args.kwargs["verify"] is False
 
 
-def test_https_falls_back_to_http_on_wrong_version():
-    calls = []
+def test_detect_scheme_http_on_wrong_version():
+    with patch("peer_client.requests.get",
+               side_effect=requests.exceptions.SSLError(
+                   "[SSL: WRONG_VERSION_NUMBER] wrong version number")):
+        assert peer_client.detect_scheme("1.2.3.4", 8008) == "http"
 
-    def fake(method, url, **kw):
-        calls.append(url)
-        if url.startswith("https://"):
-            raise requests.exceptions.SSLError(
-                "[SSL: WRONG_VERSION_NUMBER] wrong version number")
-        return _resp(200, {"ok": 1})
 
-    with patch("peer_client.requests.request", side_effect=fake):
-        r = peer_client.raw_request(PEER, "GET", "/api/system")
-    assert calls[0].startswith("https://") and calls[1].startswith("http://")
-    assert r.status_code == 200
+def test_detect_scheme_https_and_sends_no_token():
+    captured = {}
+
+    def fake_get(url, **kw):
+        captured["url"] = url
+        captured["headers"] = kw.get("headers")
+        return _resp(200, {})
+
+    with patch("peer_client.requests.get", side_effect=fake_get):
+        assert peer_client.detect_scheme("pve2.lan", 8008) == "https"
+    assert captured["url"].startswith("https://")
+    assert not captured.get("headers")  # detection never sends Authorization
+
+
+def test_detect_scheme_https_on_cert_error():
+    with patch("peer_client.requests.get",
+               side_effect=requests.exceptions.SSLError("certificate verify failed")):
+        assert peer_client.detect_scheme("h", 8008) == "https"
+
+
+def test_raw_request_never_downgrades_to_http():
+    # A request configured for https must NOT be retried over http.
+    with patch("peer_client.requests.request",
+               side_effect=requests.exceptions.SSLError(
+                   "[SSL: WRONG_VERSION_NUMBER] x")) as rq:
+        try:
+            peer_client.raw_request(PEER, "GET", "/api/system")
+            assert False, "should have raised"
+        except requests.exceptions.SSLError:
+            pass
+    assert rq.call_count == 1  # one attempt only, no plaintext retry
 
 
 def test_explicit_http_scheme_skips_https():

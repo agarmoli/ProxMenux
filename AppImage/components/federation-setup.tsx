@@ -37,11 +37,15 @@ export function FederationSetup() {
     setTesting(true)
     setMsg(null)
     try {
-      const res = await fetchApi<{ ok: boolean; node?: string; error?: string }>(
+      const res = await fetchApi<{ ok: boolean; node?: string; error?: string; warning?: string | null }>(
         "/api/federation/peers/test",
         { method: "POST", body: JSON.stringify({ host, port: Number(port), token, insecure_tls: insecure }) }
       )
-      setMsg(res.ok ? `OK — reached node "${res.node ?? "?"}"` : `Failed: ${res.error}`)
+      if (res.ok) {
+        setMsg(`OK — reached node "${res.node ?? "?"}"${res.warning ? ` · ⚠ ${res.warning}` : ""}`)
+      } else {
+        setMsg(`Failed: ${res.error}`)
+      }
     } catch (e) {
       setMsg(`Failed: ${(e as Error).message}`)
     } finally {

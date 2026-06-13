@@ -57,14 +57,42 @@ def _do_request(peer, method, path, scheme, h, params, data, timeout):
                             headers=h, timeout=timeout, verify=verify)
 
 
+def detect_scheme(host, port, *, insecure_tls=False, timeout=5):
+    """Probe a peer to decide http vs https WITHOUT sending credentials.
+
+    Returns "http" or "https". A TLS handshake failure of the 'wrong version
+    number' kind means the peer serves plain HTTP. This probe never sends an
+    Authorization header, so the token is never transmitted to a node that
+    turns out to be plaintext. Used once at add/test time to persist an
+    EXPLICIT per-peer scheme — there is no silent runtime downgrade.
+    """
+    url = "https://{host}:{port}/api/health".format(host=host, port=int(port))
+    verify = False if insecure_tls else (
+        PVE_CLUSTER_CA if os.path.exists(PVE_CLUSTER_CA) else True)
+    if verify is False:
+        _silence_insecure_warning()
+    try:
+        requests.get(url, timeout=timeout, verify=verify)
+        return "https"
+    except requests.exceptions.SSLError as exc:
+        # 'wrong version number' => the peer spoke plain HTTP. A cert error is
+        # still HTTPS (the operator just needs Skip-TLS).
+        return "http" if _looks_like_plain_http(exc) else "https"
+    except requests.exceptions.RequestException:
+        # Unreachable during probe; assume https — the real request surfaces
+        # the connection error to the caller.
+        return "https"
+
+
 def raw_request(peer, method, path, *, params=None, data=None,
                 headers=None, timeout=15):
     """Forward a request to a peer and return the requests.Response.
 
-    Uses the peer's scheme (default https). If https fails because the peer
-    actually serves plain HTTP on that port, it transparently retries over
-    http. Raises requests.exceptions.RequestException on network failure; the
-    caller (proxy route) maps that to a 502.
+    Uses the peer's EXPLICIT scheme (default https). It never silently
+    downgrades https -> http at request time, so a credentialed request is
+    never transparently re-sent over plaintext. The scheme is fixed once at
+    add/test time via detect_scheme(). Raises requests.exceptions.RequestException
+    on network failure; the caller (proxy route) maps that to a 502.
     """
     h = {}
     if peer.get("token"):
@@ -72,12 +100,7 @@ def raw_request(peer, method, path, *, params=None, data=None,
     if headers:
         h.update(headers)
     scheme = peer.get("scheme") or "https"
-    try:
-        return _do_request(peer, method, path, scheme, h, params, data, timeout)
-    except requests.exceptions.SSLError as exc:
-        if scheme == "https" and _looks_like_plain_http(exc):
-            return _do_request(peer, method, path, "http", h, params, data, timeout)
-        raise
+    return _do_request(peer, method, path, scheme, h, params, data, timeout)
 
 
 def fetch_json(peer, path, *, method="GET", json_body=None, params=None,

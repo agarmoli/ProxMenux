@@ -99,14 +99,22 @@ def list_peers():
 @require_auth
 def add_peer():
     data = request.get_json(silent=True) or {}
+    host, scheme = federation_config.split_scheme(data.get("host"))
+    insecure = bool(data.get("insecure_tls", False))
+    # Resolve the transport once, credential-lessly, and persist it explicitly
+    # so requests never silently downgrade to plaintext later.
+    if scheme is None and host:
+        scheme = peer_client.detect_scheme(host, data.get("port", 8008),
+                                           insecure_tls=insecure)
     try:
         peer = federation_config.add_peer({
             "name": data.get("name"),
-            "host": data.get("host"),
+            "host": host,
+            "scheme": scheme,
             "port": data.get("port", 8008),
             "token": data.get("token"),
             "enabled": data.get("enabled", True),
-            "insecure_tls": data.get("insecure_tls", False),
+            "insecure_tls": insecure,
         })
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -126,16 +134,20 @@ def delete_peer(name):
 def test_peer():
     data = request.get_json(silent=True) or {}
     host, scheme = federation_config.split_scheme(data.get("host", ""))
+    insecure = bool(data.get("insecure_tls", False))
+    if not host or not data.get("token"):
+        return jsonify({"ok": False, "error": "host and token are required"}), 400
+    if scheme is None:
+        scheme = peer_client.detect_scheme(host, data.get("port", 8008),
+                                           insecure_tls=insecure)
     peer = {
         "name": data.get("name", "test"),
         "host": host,
         "scheme": scheme,
         "port": data.get("port", 8008),
         "token": data.get("token", ""),
-        "insecure_tls": data.get("insecure_tls", False),
+        "insecure_tls": insecure,
     }
-    if not peer["host"] or not peer["token"]:
-        return jsonify({"ok": False, "error": "host and token are required"}), 400
     result = peer_client.fetch_json(peer, "/api/system", timeout=8)
     node = None
     if isinstance(result["data"], dict):
@@ -145,6 +157,10 @@ def test_peer():
         "status": result["status"],
         "error": result["error"],
         "node": node,
+        "scheme": scheme,
+        "warning": ("This node serves plain HTTP — the API token is sent "
+                    "unencrypted. Use only on a trusted network.")
+        if scheme == "http" else None,
     })
 
 
