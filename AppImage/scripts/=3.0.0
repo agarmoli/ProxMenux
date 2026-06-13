@@ -1,0 +1,15 @@
+Collecting gevent
+  Downloading gevent-26.5.0-cp310-cp310-manylinux_2_28_x86_64.whl (2.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.2/2.2 MB 12.3 MB/s eta 0:00:00
+Collecting gevent-websocket
+  Downloading gevent_websocket-0.10.1-py3-none-any.whl (22 kB)
+Collecting greenlet
+  Downloading greenlet-3.5.1-cp310-cp310-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (612 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 612.9/612.9 KB 21.4 MB/s eta 0:00:00
+Collecting zope.interface
+  Downloading zope_interface-8.5-cp310-cp310-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl (259 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 259.8/259.8 KB 23.9 MB/s eta 0:00:00
+Collecting zope.event
+  Downloading zope_event-6.2-py3-none-any.whl (6.5 kB)
+Installing collected packages: zope.interface, zope.event, greenlet, gevent, gevent-websocket
+Successfully installed gevent-26.5.0 gevent-websocket-0.10.1 greenlet-3.5.1 zope.event-6.2 zope.interface-8.5
