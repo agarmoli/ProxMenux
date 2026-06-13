@@ -75,6 +75,7 @@ from flask_proxmenux_routes import proxmenux_bp  # noqa: E402
 from flask_security_routes import security_bp  # noqa: E402
 from flask_notification_routes import notification_bp  # noqa: E402
 from flask_oci_routes import oci_bp  # noqa: E402
+from flask_federation_routes import federation_bp  # noqa: E402
 from notification_manager import notification_manager  # noqa: E402
 import post_install_versions  # noqa: E402  — Sprint 12A: detect post-install function updates
 from jwt_middleware import require_auth  # noqa: E402
@@ -210,6 +211,7 @@ app.register_blueprint(proxmenux_bp)
 app.register_blueprint(security_bp)
 app.register_blueprint(notification_bp)
 app.register_blueprint(oci_bp)
+app.register_blueprint(federation_bp)
 
 # Initialize terminal / WebSocket routes
 init_terminal_routes(app)

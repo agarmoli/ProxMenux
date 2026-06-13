@@ -142,6 +142,9 @@ cp "$SCRIPT_DIR/startup_grace.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠�
 cp "$SCRIPT_DIR/flask_notification_routes.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  flask_notification_routes.py not found"
 cp "$SCRIPT_DIR/oci_manager.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  oci_manager.py not found"
 cp "$SCRIPT_DIR/flask_oci_routes.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  flask_oci_routes.py not found"
+cp "$SCRIPT_DIR/flask_federation_routes.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  flask_federation_routes.py not found"
+cp "$SCRIPT_DIR/federation_config.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  federation_config.py not found"
+cp "$SCRIPT_DIR/peer_client.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  peer_client.py not found"
 cp "$SCRIPT_DIR/oci/description_templates.py" "$APP_DIR/usr/bin/" 2>/dev/null || echo "⚠️  description_templates.py not found"
 
 # Copy AI providers module for notification enhancement
