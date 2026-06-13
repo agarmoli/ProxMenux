@@ -8,6 +8,7 @@ import { Button } from "./ui/button"
 import { NotificationSettings } from "./notification-settings"
 import { HealthThresholds } from "./health-thresholds"
 import { LxcUpdateDetection } from "./lxc-update-detection"
+import { FederationSetup } from "./federation-setup"
 import { ScriptTerminalModal } from "./script-terminal-modal"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Switch } from "./ui/switch"
@@ -1482,6 +1483,9 @@ export function Settings() {
 
       {/* Notification Settings */}
       <NotificationSettings />
+
+      {/* Cluster Federation — add/remove peer nodes for the multi-node view */}
+      <FederationSetup />
 
       {/* Issue #195: snippets storage selector. Only renders when more
           than one storage advertises content=snippets — on a typical

@@ -12,6 +12,37 @@
 export const API_PORT = process.env.NEXT_PUBLIC_API_PORT || "8008"
 
 /**
+ * Federation: the "active node" is the cluster node the dashboard is
+ * currently viewing. null/empty means the local (central) node — in which
+ * case API calls go straight to the local backend exactly as before.
+ */
+const ACTIVE_NODE_KEY = "proxmenux-active-node"
+
+export function getActiveNode(): string | null {
+  if (typeof window === "undefined") return null
+  try {
+    const v = localStorage.getItem(ACTIVE_NODE_KEY)
+    return v && v.trim() ? v : null
+  } catch {
+    return null
+  }
+}
+
+export function setActiveNode(node: string | null): void {
+  if (typeof window === "undefined") return
+  try {
+    if (node) localStorage.setItem(ACTIVE_NODE_KEY, node)
+    else localStorage.removeItem(ACTIVE_NODE_KEY)
+  } catch {
+    // localStorage unavailable (private browsing) — ignore.
+  }
+}
+
+// Endpoints that must always hit the central node directly, never the proxy:
+// auth (login is against the central), and the federation control plane itself.
+const FEDERATION_LOCAL_PREFIXES = ["/api/federation", "/api/proxy", "/api/auth"]
+
+/**
  * Gets the base URL for API calls
  * Automatically detects if running behind a proxy by checking if we're on a standard port
  *
@@ -46,6 +77,17 @@ export function getApiUrl(endpoint: string): string {
 
   // Ensure endpoint starts with /
   const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`
+
+  // When viewing a remote cluster node, transparently route every normal
+  // data call through the central node's reverse proxy. Control-plane and
+  // auth endpoints always stay local.
+  const activeNode = getActiveNode()
+  if (
+    activeNode &&
+    !FEDERATION_LOCAL_PREFIXES.some((p) => normalizedEndpoint.startsWith(p))
+  ) {
+    return `${baseUrl}/api/proxy/${encodeURIComponent(activeNode)}${normalizedEndpoint}`
+  }
 
   return `${baseUrl}${normalizedEndpoint}`
 }

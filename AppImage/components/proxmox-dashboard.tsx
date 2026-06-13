@@ -18,9 +18,11 @@ import { HostBackup } from "./host-backup"
 import { OnboardingCarousel } from "./onboarding-carousel"
 import { HealthStatusModal } from "./health-status-modal"
 import { ReleaseNotesModal, useVersionCheck } from "./release-notes-modal"
-import { getApiUrl, fetchApi } from "../lib/api-config"
+import { getApiUrl, fetchApi, getActiveNode } from "../lib/api-config"
 import { TerminalPanel } from "./terminal-panel"
 import { AvatarMenu } from "./avatar-menu"
+import { ClusterOverview } from "./cluster-overview"
+import { NodeSelector } from "./node-selector"
 import {
   RefreshCw,
   AlertTriangle,
@@ -41,6 +43,7 @@ import {
   Info,
   DatabaseBackup,
   ChevronDown,
+  Layers,
 } from "lucide-react"
 import Image from "next/image"
 import { ThemeToggle } from "./theme-toggle"
@@ -92,6 +95,12 @@ export function ProxmoxDashboard() {
   const [componentKey, setComponentKey] = useState(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
+  // Federation: true when the dashboard is viewing a remote cluster node
+  // (read after mount to avoid a static-export hydration mismatch).
+  const [isRemoteNode, setIsRemoteNode] = useState(false)
+  useEffect(() => {
+    setIsRemoteNode(getActiveNode() !== null)
+  }, [])
   const [infoCount, setInfoCount] = useState(0)
   const [updateAvailable, setUpdateAvailable] = useState(false)
   const [showNavigation, setShowNavigation] = useState(true)
@@ -363,6 +372,7 @@ export function ProxmoxDashboard() {
   const getActiveTabLabel = () => {
     switch (activeTab) {
       case "overview":  return "Overview"
+      case "cluster":   return "Cluster"
       case "vms":       return "VMs & LXCs"
       case "storage":   return "Storage"
       case "network":   return "Network"
@@ -565,6 +575,9 @@ export function ProxmoxDashboard() {
         `}
       >
         <div className="container mx-auto px-4 lg:px-6 pt-4 lg:pt-6">
+          <div className="mb-3 flex justify-end">
+            <NodeSelector />
+          </div>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
             {/* Sprint 13D nav redesign — 6 top-level slots in usage order:
                 Overview · VMs & LXCs · Node ⌄ · Backup · Terminal · Admin ⌄
@@ -583,6 +596,7 @@ export function ProxmoxDashboard() {
               // crumb shows where you are, the chevron tells you the
               // siblings are one click away.
               const NODE_ITEMS = [
+                { value: "cluster",  label: "Cluster",  Icon: Layers,      default: false },
                 { value: "storage",  label: "Storage",  Icon: HardDrive,   default: false },
                 { value: "network",  label: "Network",  Icon: NetworkIcon, default: false },
                 { value: "hardware", label: "Hardware", Icon: Cpu,         default: false },
@@ -660,7 +674,7 @@ export function ProxmoxDashboard() {
                   </TabsTrigger>
 
                   {/* Direct: Terminal */}
-                  <TabsTrigger value="terminal" className={triggerActiveClass}>
+                  <TabsTrigger value="terminal" className={triggerActiveClass} disabled={isRemoteNode} title={isRemoteNode ? "Open the terminal directly on the node" : undefined}>
                     <Terminal className="mr-2 h-4 w-4" />
                     Terminal
                   </TabsTrigger>
@@ -729,6 +743,10 @@ export function ProxmoxDashboard() {
                         <LayoutDashboard className="h-5 w-5" />
                         <span>Overview</span>
                       </Button>
+                      <Button variant="ghost" onClick={() => select("cluster")} className={itemClass(activeTab === "cluster")}>
+                        <Layers className="h-5 w-5" />
+                        <span>Cluster</span>
+                      </Button>
                       <Button variant="ghost" onClick={() => select("vms")} className={itemClass(activeTab === "vms")}>
                         <Boxes className="h-5 w-5" />
                         <span>VMs &amp; LXCs</span>
@@ -749,7 +767,7 @@ export function ProxmoxDashboard() {
                         <DatabaseBackup className="h-5 w-5" />
                         <span>Backup</span>
                       </Button>
-                      <Button variant="ghost" onClick={() => select("terminal")} className={itemClass(activeTab === "terminal")}>
+                      <Button variant="ghost" onClick={() => select("terminal")} className={itemClass(activeTab === "terminal")} disabled={isRemoteNode}>
                         <Terminal className="h-5 w-5" />
                         <span>Terminal</span>
                       </Button>
@@ -780,6 +798,10 @@ export function ProxmoxDashboard() {
 
       <div className="container mx-auto px-4 md:px-6 py-4 md:py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
+          <TabsContent value="cluster" className="space-y-4 md:space-y-6 mt-0">
+            <ClusterOverview key={`cluster-${componentKey}`} />
+          </TabsContent>
+
           <TabsContent value="overview" className="space-y-4 md:space-y-6 mt-0">
             <SystemOverview key={`overview-${componentKey}`} />
           </TabsContent>
@@ -809,7 +831,14 @@ export function ProxmoxDashboard() {
           </TabsContent>
 
           <TabsContent value="terminal" className="mt-0">
-            <TerminalPanel key={`terminal-${componentKey}`} />
+            {isRemoteNode ? (
+              <div className="text-sm text-muted-foreground p-4">
+                The web terminal is only available on the local node. Switch back to
+                “this node”, or open ProxMenux directly on the remote node, to use it.
+              </div>
+            ) : (
+              <TerminalPanel key={`terminal-${componentKey}`} />
+            )}
           </TabsContent>
 
           <TabsContent value="security" className="space-y-4 md:space-y-6 mt-0">
