@@ -47,6 +47,9 @@ def _validate_peer(peer):
         "port": port,
         "token": token,
         "enabled": bool(peer.get("enabled", True)),
+        # Opt-in: skip TLS verification for this peer (addressed by IP, or a
+        # self-signed cert not issued by the Proxmox cluster CA).
+        "insecure_tls": bool(peer.get("insecure_tls", False)),
     }
 
 

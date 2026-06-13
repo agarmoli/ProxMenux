@@ -15,13 +15,28 @@ import requests
 PVE_CLUSTER_CA = "/etc/pve/pve-root-ca.pem"
 
 
-def _verify_arg():
+def _verify_arg(peer=None):
+    # Per-peer opt-out for when a peer is addressed by IP or presents a cert
+    # not issued by the Proxmox cluster CA (a separate node / self-signed).
+    # Opt-in only — secure by default.
+    if peer is not None and peer.get("insecure_tls"):
+        return False
     # All nodes in a Proxmox cluster share this CA via the /etc/pve cluster
     # filesystem, so the central node can verify peer certificates against it.
     # Fall back to the system trust store when the file is absent (dev hosts).
     if os.path.exists(PVE_CLUSTER_CA):
         return PVE_CLUSTER_CA
     return True
+
+
+def _silence_insecure_warning():
+    # Avoid flooding the log with one urllib3 InsecureRequestWarning per call
+    # when a peer is deliberately configured with insecure_tls.
+    try:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    except Exception:
+        pass
 
 
 def raw_request(peer, method, path, *, params=None, data=None,
@@ -38,8 +53,11 @@ def raw_request(peer, method, path, *, params=None, data=None,
         h["Authorization"] = "Bearer {}".format(peer["token"])
     if headers:
         h.update(headers)
+    verify = _verify_arg(peer)
+    if verify is False:
+        _silence_insecure_warning()
     return requests.request(method, url, params=params, data=data,
-                            headers=h, timeout=timeout, verify=_verify_arg())
+                            headers=h, timeout=timeout, verify=verify)
 
 
 def fetch_json(peer, path, *, method="GET", json_body=None, params=None,

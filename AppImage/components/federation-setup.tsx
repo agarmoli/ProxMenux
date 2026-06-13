@@ -13,6 +13,7 @@ interface Peer {
   host: string
   port: number
   enabled: boolean
+  insecure_tls?: boolean
 }
 
 export function FederationSetup() {
@@ -23,6 +24,7 @@ export function FederationSetup() {
   const [token, setToken] = useState("")
   const [msg, setMsg] = useState<string | null>(null)
   const [testing, setTesting] = useState(false)
+  const [insecure, setInsecure] = useState(false)
 
   const load = () => {
     fetchApi<{ peers: Peer[] }>("/api/federation/peers")
@@ -37,7 +39,7 @@ export function FederationSetup() {
     try {
       const res = await fetchApi<{ ok: boolean; node?: string; error?: string }>(
         "/api/federation/peers/test",
-        { method: "POST", body: JSON.stringify({ host, port: Number(port), token }) }
+        { method: "POST", body: JSON.stringify({ host, port: Number(port), token, insecure_tls: insecure }) }
       )
       setMsg(res.ok ? `OK — reached node "${res.node ?? "?"}"` : `Failed: ${res.error}`)
     } catch (e) {
@@ -52,9 +54,9 @@ export function FederationSetup() {
     try {
       await fetchApi("/api/federation/peers", {
         method: "POST",
-        body: JSON.stringify({ name, host, port: Number(port), token }),
+        body: JSON.stringify({ name, host, port: Number(port), token, insecure_tls: insecure }),
       })
-      setName(""); setHost(""); setPort("8008"); setToken("")
+      setName(""); setHost(""); setPort("8008"); setToken(""); setInsecure(false)
       load()
     } catch (e) {
       setMsg(`Error: ${(e as Error).message}`)
@@ -91,6 +93,7 @@ export function FederationSetup() {
               >
                 <span>
                   <strong>{p.name}</strong> — {p.host}:{p.port}
+                  {p.insecure_tls ? <span className="ml-2 text-xs text-amber-500">(TLS sin verificar)</span> : null}
                 </span>
                 <Button variant="ghost" size="sm" onClick={() => removePeer(p.name)}>
                   <Trash2 className="h-4 w-4" />
@@ -118,6 +121,23 @@ export function FederationSetup() {
             <Input id="fed-token" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="eyJ…" />
           </div>
         </div>
+
+        <label className="flex items-start gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={insecure}
+            onChange={(e) => setInsecure(e.target.checked)}
+          />
+          <span>
+            Skip TLS verification for this node
+            <span className="block text-xs text-muted-foreground">
+              Enable when adding the node by <strong>IP address</strong>, or when its
+              certificate isn&apos;t issued by the Proxmox cluster CA (separate node /
+              self-signed). Only use on a trusted network.
+            </span>
+          </span>
+        </label>
 
         {msg && <div className="text-sm">{msg}</div>}
 

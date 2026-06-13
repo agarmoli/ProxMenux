@@ -18,7 +18,7 @@ import { HostBackup } from "./host-backup"
 import { OnboardingCarousel } from "./onboarding-carousel"
 import { HealthStatusModal } from "./health-status-modal"
 import { ReleaseNotesModal, useVersionCheck } from "./release-notes-modal"
-import { getApiUrl, fetchApi, getActiveNode } from "../lib/api-config"
+import { getApiUrl, fetchApi, getActiveNode, setActiveNode, getLocalApiUrl } from "../lib/api-config"
 import { TerminalPanel } from "./terminal-panel"
 import { AvatarMenu } from "./avatar-menu"
 import { ClusterOverview } from "./cluster-overview"
@@ -98,6 +98,9 @@ export function ProxmoxDashboard() {
   // Federation: true when the dashboard is viewing a remote cluster node
   // (read after mount to avoid a static-export hydration mismatch).
   const [isRemoteNode, setIsRemoteNode] = useState(false)
+  // Set when the active remote node can't be reached through the central's
+  // proxy (the central itself is fine). Drives a distinct, escapable banner.
+  const [remoteNodeError, setRemoteNodeError] = useState<string | null>(null)
   useEffect(() => {
     setIsRemoteNode(getActiveNode() !== null)
   }, [])
@@ -198,8 +201,17 @@ export function ProxmoxDashboard() {
         nodeId: data.node_id || "Unknown",
       })
       setIsServerConnected(true)
+      setRemoteNodeError(null)
     } catch (error) {
-      // Expected to fail in v0 preview (no Flask server)
+      // When viewing a remote cluster node, a failure here means the PEER is
+      // unreachable — the central server is fine (it served this page). Don't
+      // raise the "central down" banner; surface a remote-node error with an
+      // escape hatch instead.
+      const activeNode = getActiveNode()
+      if (activeNode) {
+        setRemoteNodeError(activeNode)
+        return
+      }
 
       setIsServerConnected(false)
       setSystemStatus((prev) => ({
@@ -405,11 +417,35 @@ export function ProxmoxDashboard() {
               <p>• The ProxMenux server should start automatically on port 8008</p>
               <p>
                 • Try accessing:{" "}
-                <a href={getApiUrl("/api/health")} target="_blank" rel="noopener noreferrer" className="underline">
-                  {getApiUrl("/api/health")}
+                <a href={getLocalApiUrl("/api/health")} target="_blank" rel="noopener noreferrer" className="underline">
+                  {getLocalApiUrl("/api/health")}
                 </a>
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {remoteNodeError && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-3">
+          <div className="container mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-amber-600 text-sm">
+              <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+              <span>
+                Can&apos;t reach node &ldquo;{remoteNodeError}&rdquo;. It may be offline or
+                unreachable from this node (check the host/port and TLS settings).
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setActiveNode(null)
+                window.location.reload()
+              }}
+            >
+              Back to this node
+            </Button>
           </div>
         </div>
       )}

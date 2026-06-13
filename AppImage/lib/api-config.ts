@@ -93,6 +93,17 @@ export function getApiUrl(endpoint: string): string {
 }
 
 /**
+ * Like getApiUrl but ALWAYS targets the local (central) node, ignoring the
+ * active-node proxy routing. Use for "is the central server up?" probes so a
+ * remote node being down never masquerades as the central server failing.
+ */
+export function getLocalApiUrl(endpoint: string): string {
+  const baseUrl = getApiBaseUrl()
+  const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`
+  return `${baseUrl}${normalizedEndpoint}`
+}
+
+/**
  * Gets the JWT token from localStorage
  *
  * @returns JWT token or null if not authenticated
