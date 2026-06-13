@@ -54,28 +54,20 @@ jobs:
         retention-days: 30
 
     - name: Generate SHA256 checksum
+      working-directory: AppImage/dist
       run: |
-        cd AppImage/dist
         sha256sum *.AppImage > ProxMenux-Monitor.AppImage.sha256
         echo "Generated SHA256:"
         cat ProxMenux-Monitor.AppImage.sha256
 
-    - name: Upload AppImage and checksum to /AppImage folder in main
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+    - name: Upload SHA256 checksum
+      uses: actions/upload-artifact@v7
+      with:
+        name: ProxMenux-${{ steps.version.outputs.VERSION }}-sha256
+        path: AppImage/dist/*.sha256
+        retention-days: 30
 
-        git fetch origin main
-        git checkout main
-
-        rm -f AppImage/*.AppImage AppImage/*.sha256 || true
-
-        # Copy new files
-        cp AppImage/dist/*.AppImage AppImage/
-        cp AppImage/dist/ProxMenux-Monitor.AppImage.sha256 AppImage/
-
-        git add AppImage/*.AppImage AppImage/*.sha256
-        git commit -m "Update AppImage build ($(date +'%Y-%m-%d %H:%M:%S'))" || echo "No changes to commit"
-        git push origin main
+    # NOTE (federation branch): the upstream "commit AppImage to main" step is
+    # intentionally removed here so building this branch never pushes binaries
+    # to main/develop. The built AppImage is available as a downloadable run
+    # artifact only.
