@@ -161,6 +161,99 @@ def test_federation_vms_tags_origin_node(client, monkeypatch):
     assert by_node == {1: "pve1", 2: "pve2"}
 
 
+def test_aggregate_merges_self_and_peer(client, monkeypatch):
+    monkeypatch.setattr(
+        fed.federation_config, "load_peers",
+        lambda: [{"name": "pve2", "host": "h", "port": 8008,
+                  "token": "t", "enabled": True}])
+    monkeypatch.setattr(
+        fed, "_fetch_local",
+        lambda path, auth, params=None: {"online": True, "status": 200,
+                                         "data": {"who": "self"}, "error": None})
+    monkeypatch.setattr(
+        fed.peer_client, "fetch_json",
+        lambda peer, path, **kw: {"online": True, "status": 200,
+                                  "data": {"who": "peer"}, "error": None})
+    body = client.get("/api/federation/aggregate?path=/api/network").get_json()
+    assert body["path"] == "/api/network"
+    nodes = body["nodes"]
+    assert len(nodes) == 2
+    assert nodes[0] == {"node": "pve1", "is_self": True, "online": True,
+                        "status": 200, "error": None, "data": {"who": "self"}}
+    assert nodes[1]["node"] == "pve2"
+    assert nodes[1]["data"] == {"who": "peer"}
+
+
+def test_aggregate_self_only_when_no_peers(client, monkeypatch):
+    monkeypatch.setattr(fed.federation_config, "load_peers", lambda: [])
+    monkeypatch.setattr(
+        fed, "_fetch_local",
+        lambda path, auth, params=None: {"online": True, "status": 200,
+                                         "data": {"x": 1}, "error": None})
+    nodes = client.get("/api/federation/aggregate?path=/api/network").get_json()["nodes"]
+    assert len(nodes) == 1
+    assert nodes[0]["is_self"] is True
+
+
+def test_aggregate_marks_offline_peer(client, monkeypatch):
+    monkeypatch.setattr(
+        fed.federation_config, "load_peers",
+        lambda: [{"name": "pve2", "host": "h", "port": 8008,
+                  "token": "t", "enabled": True}])
+    monkeypatch.setattr(
+        fed, "_fetch_local",
+        lambda path, auth, params=None: {"online": True, "status": 200,
+                                         "data": {}, "error": None})
+    monkeypatch.setattr(
+        fed.peer_client, "fetch_json",
+        lambda peer, path, **kw: {"online": False, "status": None,
+                                  "data": None, "error": "timeout"})
+    r = client.get("/api/federation/aggregate?path=/api/network")
+    assert r.status_code == 200
+    nodes = r.get_json()["nodes"]
+    assert nodes[1]["online"] is False
+    assert nodes[1]["data"] is None
+    assert nodes[1]["error"] == "timeout"
+
+
+def test_aggregate_excludes_disabled_peer(client, monkeypatch):
+    monkeypatch.setattr(
+        fed.federation_config, "load_peers",
+        lambda: [{"name": "pve2", "host": "h", "port": 8008,
+                  "token": "t", "enabled": False}])
+    monkeypatch.setattr(
+        fed, "_fetch_local",
+        lambda path, auth, params=None: {"online": True, "status": 200,
+                                         "data": {}, "error": None})
+    nodes = client.get("/api/federation/aggregate?path=/api/network").get_json()["nodes"]
+    assert [n["node"] for n in nodes] == ["pve1"]
+
+
+def test_aggregate_requires_path(client):
+    assert client.get("/api/federation/aggregate").status_code == 400
+
+
+def test_aggregate_blocks_non_proxyable(client):
+    assert client.get("/api/federation/aggregate?path=/api/auth/login").status_code == 403
+
+
+def test_aggregate_blocks_traversal(client):
+    assert client.get("/api/federation/aggregate?path=/api/x/../auth/login").status_code == 400
+
+
+def test_aggregate_forwards_query_params(client, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(fed.federation_config, "load_peers", lambda: [])
+
+    def fake_local(path, auth, params=None):
+        captured["params"] = params
+        return {"online": True, "status": 200, "data": {}, "error": None}
+
+    monkeypatch.setattr(fed, "_fetch_local", fake_local)
+    client.get("/api/federation/aggregate?path=/api/logs&limit=100&level=warn")
+    assert captured["params"] == {"limit": "100", "level": "warn"}
+
+
 def test_fetch_local_forwards_params():
     from flask import Flask, request, jsonify
     app = Flask(__name__)

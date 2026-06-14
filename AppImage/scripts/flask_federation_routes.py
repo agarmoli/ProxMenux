@@ -14,6 +14,7 @@ Routes:
   GET    /api/federation/nodes          self + peers with reachability
   GET    /api/federation/overview       per-node CPU/RAM/temp/health/vm summary
   GET    /api/federation/vms            unified VM/LXC list across all nodes
+  GET    /api/federation/aggregate     fan-out any GET path to all nodes
   ANY    /api/proxy/<node>/<path>       reverse-proxy to a peer's API
 """
 
@@ -242,6 +243,44 @@ def federation_vms():
             for vms in ex.map(lambda p: collect(p["name"], False, p), peers):
                 all_vms.extend(vms)
     return jsonify({"vms": all_vms})
+
+
+@federation_bp.route("/api/federation/aggregate", methods=["GET"])
+@require_auth
+def aggregate():
+    """Generic fan-out: forward `path` to every node, return per-node results.
+
+    {path, nodes:[{node,is_self,online,status,error,data}]}. A "dumb pipe" — it
+    does not know the response shape; the frontend flattens per view. Reuses the
+    proxy path allowlist so /api/auth, /api/federation and /api/proxy can't be
+    fanned out. Extra query params (besides `path`) are forwarded to each node.
+    """
+    raw = request.args.get("path", "").strip()
+    if not raw:
+        return jsonify({"error": "path parameter required"}), 400
+    target_path, err = _normalize_proxy_path(raw.lstrip("/"))
+    if err == "invalid path":
+        return jsonify({"error": err}), 400
+    if err:
+        return jsonify({"error": err}), 403
+
+    incoming_auth = request.headers.get("Authorization")
+    extra = {k: v for k, v in request.args.items() if k != "path"} or None
+
+    def collect(name, is_self, peer=None):
+        if is_self:
+            r = _fetch_local(target_path, incoming_auth, params=extra)
+        else:
+            r = peer_client.fetch_json(peer, target_path, params=extra)
+        return {"node": name, "is_self": is_self, "online": r["online"],
+                "status": r["status"], "error": r["error"], "data": r["data"]}
+
+    nodes = [collect(_self_node_name(), True)]
+    peers = [p for p in federation_config.load_peers() if p["enabled"]]
+    if peers:
+        with ThreadPoolExecutor(max_workers=min(8, len(peers))) as ex:
+            nodes.extend(ex.map(lambda p: collect(p["name"], False, p), peers))
+    return jsonify({"path": target_path, "nodes": nodes})
 
 
 # ── Reverse proxy ────────────────────────────────────────────────────────
