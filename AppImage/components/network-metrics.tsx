@@ -932,7 +932,14 @@ export function NetworkMetrics() {
                     ].find((iface) => iface.name === selectedInterface.name)
                   : selectedInterface
 
-                const displayInterface = currentInterfaceData || selectedInterface
+                // Carry the origin-node tags forward: currentInterfaceData comes
+                // from modalNetworkData (untagged API objects), so without this the
+                // per-interface chart would route to the local node for remote ifaces.
+                const displayInterface = {
+                  ...(currentInterfaceData || selectedInterface),
+                  _node: selectedInterface._node,
+                  _node_is_self: selectedInterface._node_is_self,
+                }
 
                 return (
                   <>
