@@ -76,6 +76,7 @@ from flask_security_routes import security_bp  # noqa: E402
 from flask_notification_routes import notification_bp  # noqa: E402
 from flask_oci_routes import oci_bp  # noqa: E402
 from flask_federation_routes import federation_bp  # noqa: E402
+from flask_lxc_app_routes import lxc_app_bp  # noqa: E402
 from notification_manager import notification_manager  # noqa: E402
 import post_install_versions  # noqa: E402  — Sprint 12A: detect post-install function updates
 from jwt_middleware import require_auth  # noqa: E402
@@ -212,6 +213,7 @@ app.register_blueprint(security_bp)
 app.register_blueprint(notification_bp)
 app.register_blueprint(oci_bp)
 app.register_blueprint(federation_bp)
+app.register_blueprint(lxc_app_bp)
 
 # Initialize terminal / WebSocket routes
 init_terminal_routes(app)
@@ -4826,11 +4828,22 @@ def _get_lxc_update_status_map() -> dict:
     return out
 
 
+def _get_lxc_app_update_map() -> dict:
+    """vmid -> app_update result, projected from lxc_app_updates. Empty on any
+    error so /api/vms degrades gracefully."""
+    try:
+        import lxc_app_updates
+        return lxc_app_updates.get_app_update_map() or {}
+    except Exception:
+        return {}
+
+
 def get_proxmox_vms():
     """Get Proxmox VM and LXC information (requires pvesh command) - only from local node"""
     try:
         all_vms = []
         lxc_updates_map = _get_lxc_update_status_map()
+        lxc_app_map = _get_lxc_app_update_map()
 
         try:
             # local_node = socket.gethostname()
@@ -4871,6 +4884,9 @@ def get_proxmox_vms():
                         upd = lxc_updates_map.get(str(resource.get('vmid')))
                         if upd is not None:
                             vm_data['update_check'] = upd
+                        app_upd = lxc_app_map.get(str(resource.get('vmid')))
+                        if app_upd is not None:
+                            vm_data['app_update'] = app_upd
                     all_vms.append(vm_data)
 
                 return all_vms
