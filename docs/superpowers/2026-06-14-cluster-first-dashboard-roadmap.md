@@ -57,8 +57,12 @@ http/https, `fetchAtNode`/`getLocalApiUrl` en `lib/api-config.ts`).
 1. ✅ **Agregador genérico** `/api/federation/aggregate` (+ pytest) **+ piloto Network**
    (tabla all-nodes con columna Nodo + filtro local + drill-down enrutado por `fetchAtNode`;
    resumen sigue-al-filtro). *Hecho — specs/plans en `docs/superpowers/`.*
-2. **Storage** unificado — fase dedicada (presupuestar ~15 call-sites + semántica de
-   schedules/tools por-nodo).
+2. ✅ **Storage** unificado — 4 tablas con columna Nodo + filtro + resumen por-nodo;
+   modal de disco (SMART/history/schedule/tools/temperatura) enrutado por `fetchAtNode`
+   al nodo del disco; **cero backend** (las schedules son por-nodo, se alcanzan vía el
+   disco). *Hecho — spec/plan en `docs/superpowers/`. Revisión final: SHIP-READY.*
+   *(Limitación conocida pre-existente: si el `/api/storage` del nodo central falla, el
+   guard de error tapa la pestaña aunque haya peers sanos — pendiente para más adelante.)*
 3. **Logs** unificado (merge por tiempo + Nodo).
 4. **Health** unificado.
 5. **Hardware** apilado por nodo.
@@ -77,17 +81,21 @@ Cada fase = brainstorm corto → spec → plan → implementar → rebuild → i
 - **Fase 1 ✅:** agregador genérico `/api/federation/aggregate` (8 tests pytest, suite 61
   verde) + **Network** convertido a all-nodes (columna Nodo, filtro local, drill-down
   enrutado, resumen sigue-al-filtro, paridad single-node). Revisión final: SHIP-READY.
+- **Fase 2 ✅:** **Storage** convertido a all-nodes (4 tablas con columna Nodo, filtro,
+  resumen por-nodo, modal de disco enrutado por `fetchAtNode`, cero backend). Revisión
+  final: SHIP-READY. Ambas fases solo en código (frontend); falta el gate manual en nodos.
 - Specs/planes en `docs/superpowers/specs|plans/`.
 
 ## Punto de arranque exacto para la próxima sesión
 
-1. (Antes — gate manual de la Fase 1) Rebuild AppImage (`AppImage/scripts/build_appimage.sh`)
-   + instalar en los 2 nodos y comprobar la pestaña Network: interfaces de ambos con
-   columna Nodo, chips de filtro, drill-down de interfaz remota correcto, nodo parado como
-   "offline". Si `./AppRun` crashea (cabo suelto previo), capturar el traceback.
-2. **Brainstorm de la Fase 2** (Storage unificado) — su propia fase, reutilizando el
-   agregador; presupuestar los ~15 call-sites de drill-down + semántica schedules/tools.
-3. De ahí, fases 3-6 (Logs/Health/Hardware/Overview) reutilizando el agregador, y la
-   fase 7 final (selector global → filtro reactivo).
+1. (Antes — gate manual de Fases 1+2) Rebuild AppImage (`AppImage/scripts/build_appimage.sh`,
+   en un nodo — necesita `libupsclient`, ausente en WSL) + instalar en los 2 nodos y
+   comprobar **Network** (interfaces de ambos, filtro, drill-down remoto, nodo offline) y
+   **Storage** (discos/ZFS/PVE-storage/mounts de ambos con columna Nodo, abrir disco remoto
+   → SMART/temperatura/schedule del nodo correcto). Si `./AppRun` crashea, capturar traceback.
+2. **Brainstorm de la Fase 3** (Logs unificado: merge por tiempo + columna Nodo),
+   reutilizando el agregador, mismo patrón que Network/Storage.
+3. De ahí, fases 4-6 (Health/Hardware/Overview) y la fase 7 final (selector global →
+   filtro reactivo; resolver de paso el guard de error del nodo central de Storage).
 
 > Nada se pierde entre sesiones: todo está commiteado en `feature/federation` y documentado aquí.
