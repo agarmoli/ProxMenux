@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect, useCallback } from "react"
-import { getAuthToken } from "@/lib/api-config"
+import { getAuthToken, aggregateUrl, getLocalApiUrl, nodeEndpoint, type AggregateResponse, type AggregateNode } from "@/lib/api-config"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -114,6 +114,11 @@ const CATEGORIES = [
   { key: "security", category: "security", label: "Security & Certificates", Icon: Shield },
 ]
 
+const STATUS_RANK: Record<string, number> = { CRITICAL: 3, WARNING: 2, UNKNOWN: 1, OK: 0 }
+function worseStatus(a: string, b: string): string {
+  return (STATUS_RANK[(b || "OK").toUpperCase()] ?? 0) > (STATUS_RANK[(a || "OK").toUpperCase()] ?? 0) ? b : a
+}
+
 export function HealthStatusModal({ open, onOpenChange, getApiUrl }: HealthStatusModalProps) {
   const [loading, setLoading] = useState(true)
   const [healthData, setHealthData] = useState<HealthDetails | null>(null)
@@ -122,89 +127,64 @@ export function HealthStatusModal({ open, onOpenChange, getApiUrl }: HealthStatu
   const [error, setError] = useState<string | null>(null)
   const [dismissingKey, setDismissingKey] = useState<string | null>(null)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  const [perNodeHealth, setPerNodeHealth] = useState<AggregateNode<FullHealthData>[]>([])
+  const [selectedHealthNode, setSelectedHealthNode] = useState<string | null>(null)
 
   const fetchHealthDetails = useCallback(async () => {
     setLoading(true)
     setError(null)
 
     try {
-      let newOverallStatus = "OK"
-      
-      // Use the new combined endpoint for fewer round-trips
       const token = getAuthToken()
       const authHeaders: Record<string, string> = {}
       if (token) {
         authHeaders["Authorization"] = `Bearer ${token}`
       }
 
-      const response = await fetch(getApiUrl("/api/health/full"), { headers: authHeaders })
-      let infoCount = 0
-      
-      if (!response.ok) {
-        // Fallback to legacy endpoint
-        const legacyResponse = await fetch(getApiUrl("/api/health/details"), { headers: authHeaders })
-        if (!legacyResponse.ok) throw new Error("Failed to fetch health details")
-        const data = await legacyResponse.json()
-        setHealthData(data)
-        setDismissedItems([])
-        setCustomSuppressions([])
-        newOverallStatus = data?.overall || "OK"
-        
-        // Count INFO categories from legacy data
-        if (data?.details) {
+      const response = await fetch(getApiUrl(aggregateUrl("/api/health/full")), { headers: authHeaders })
+      if (!response.ok) throw new Error("Failed to fetch health details")
+      const agg: AggregateResponse<FullHealthData> = await response.json()
+      const online = agg.nodes.filter((n) => n.online && n.data)
+      setPerNodeHealth(online)
+
+      const rankOf = (n: AggregateNode<FullHealthData>) => STATUS_RANK[(n.data?.health?.overall || "OK").toUpperCase()] ?? 0
+      const worstNode = online.reduce<AggregateNode<FullHealthData> | null>(
+        (worst, n) => (!worst || rankOf(n) > rankOf(worst) ? n : worst),
+        null,
+      )
+      const chosen = online.find((n) => n.node === selectedHealthNode) || worstNode || online[0] || null
+      setSelectedHealthNode(chosen?.node ?? null)
+      setHealthData(chosen?.data?.health ?? null)
+      setDismissedItems(chosen?.data?.dismissed ?? [])
+      setCustomSuppressions(chosen?.data?.custom_suppressions ?? [])
+
+      // Header event: WORST overall + SUMMED info across the whole cluster.
+      let clusterStatus = "OK"
+      let clusterInfo = 0
+      for (const n of online) {
+        clusterStatus = worseStatus(clusterStatus, n.data?.health?.overall || "OK")
+        const customCats = new Set((n.data?.custom_suppressions || []).map((cs) => cs.category))
+        const dismissedCats = new Set(
+          (n.data?.dismissed || [])
+            .filter((d) => !customCats.has(d.category))
+            .map((d) => CATEGORIES.find((c) => c.category === d.category || c.key === d.category)?.key)
+            .filter(Boolean) as string[],
+        )
+        const cats = n.data?.health?.details as Record<string, { status?: string }> | undefined
+        if (cats) {
           CATEGORIES.forEach(({ key }) => {
-            const cat = data.details[key as keyof typeof data.details]
-            if (cat && cat.status?.toUpperCase() === "INFO") {
-              infoCount++
-            }
-          })
-        }
-      } else {
-        const fullData: FullHealthData = await response.json()
-        setHealthData(fullData.health)
-        setDismissedItems(fullData.dismissed || [])
-        setCustomSuppressions(fullData.custom_suppressions || [])
-        newOverallStatus = fullData.health?.overall || "OK"
-        
-        // Get categories that have dismissed items (these become INFO)
-        const customCats = new Set((fullData.custom_suppressions || []).map((cs: { category: string }) => cs.category))
-        const filteredDismissed = (fullData.dismissed || []).filter((item: { category: string }) => !customCats.has(item.category))
-        const categoriesWithDismissed = new Set<string>()
-        filteredDismissed.forEach((item: { category: string }) => {
-          const catMeta = CATEGORIES.find(c => c.category === item.category || c.key === item.category)
-          if (catMeta) {
-            categoriesWithDismissed.add(catMeta.key)
-          }
-        })
-        
-        // Count effective INFO categories (original INFO + OK categories with dismissed)
-        if (fullData.health?.details) {
-          CATEGORIES.forEach(({ key }) => {
-            const cat = fullData.health.details[key as keyof typeof fullData.health.details]
-            if (cat) {
-              const originalStatus = cat.status?.toUpperCase()
-              // Count as INFO if: originally INFO OR (originally OK and has dismissed items)
-              if (originalStatus === "INFO" || (originalStatus === "OK" && categoriesWithDismissed.has(key))) {
-                infoCount++
-              }
-            }
+            const st = cats[key]?.status?.toUpperCase()
+            if (st === "INFO" || (st === "OK" && dismissedCats.has(key))) clusterInfo++
           })
         }
       }
-      
-      const totalInfoCount = infoCount
-      
-      // Emit event with the FRESH data from the response, not the stale state
-      const event = new CustomEvent("healthStatusUpdated", {
-        detail: { status: newOverallStatus, infoCount: totalInfoCount },
-      })
-      window.dispatchEvent(event)
+      window.dispatchEvent(new CustomEvent("healthStatusUpdated", { detail: { status: clusterStatus, infoCount: clusterInfo } }))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error")
     } finally {
       setLoading(false)
     }
-  }, [getApiUrl])
+  }, [getApiUrl, selectedHealthNode])
 
   // Tick counter to force re-render every 30s so "X minutes ago" stays current
   const [, setTick] = useState(0)
@@ -365,6 +345,15 @@ export function HealthStatusModal({ open, onOpenChange, getApiUrl }: HealthStatu
     }
   }
 
+  const pickHealthNode = (nodeName: string) => {
+    const n = perNodeHealth.find((x) => x.node === nodeName)
+    if (!n) return
+    setSelectedHealthNode(nodeName)
+    setHealthData(n.data?.health ?? null)
+    setDismissedItems(n.data?.dismissed ?? [])
+    setCustomSuppressions(n.data?.custom_suppressions ?? [])
+  }
+
   // `suppressionHours` overrides the category default for this dismiss:
   //   - undefined → backend uses the category's configured suppression
   //   - 24, 168 (7 days)  → silence for that many hours
@@ -377,7 +366,8 @@ export function HealthStatusModal({ open, onOpenChange, getApiUrl }: HealthStatu
     setDismissingKey(errorKey)
 
     try {
-      const url = getApiUrl("/api/health/acknowledge")
+      const ackNode = perNodeHealth.find((x) => x.node === selectedHealthNode)
+      const url = getLocalApiUrl(nodeEndpoint(ackNode?.node, ackNode?.is_self, "/api/health/acknowledge"))
       const token = getAuthToken()
       const headers: Record<string, string> = { "Content-Type": "application/json" }
       if (token) {
@@ -640,6 +630,25 @@ export function HealthStatusModal({ open, onOpenChange, getApiUrl }: HealthStatu
               </div>
               )}
             </div>
+
+            {perNodeHealth.length > 1 && (
+              <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+                {perNodeHealth.map((n) => {
+                  const st = (n.data?.health?.overall || "OK").toUpperCase()
+                  const dot = st === "CRITICAL" ? "bg-red-500" : st === "WARNING" ? "bg-yellow-500" : "bg-green-500"
+                  const active = n.node === selectedHealthNode
+                  return (
+                    <button
+                      key={n.node}
+                      onClick={() => pickHealthNode(n.node)}
+                      className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${active ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />{n.node}{n.is_self ? " (this node)" : ""}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
 
             {healthData.summary && healthData.summary !== "All systems operational" && (
               <div className="text-xs sm:text-sm p-3 rounded-lg bg-muted/20 border overflow-hidden max-w-full">
