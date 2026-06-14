@@ -232,7 +232,7 @@ export function NetworkMetrics() {
   const aggNodes = agg?.nodes ?? []
   const onlineNodes = aggNodes.filter((n) => n.online && n.data)
   const offlineNodes = aggNodes.filter((n) => !n.online)
-  const nodeNames = aggNodes.map((n) => n.node)
+  const nodeNames = onlineNodes.map((n) => n.node)
 
   const tag = (
     list: NetworkInterface[] | undefined,
@@ -283,11 +283,8 @@ export function NetworkMetrics() {
     healthColor = "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
   }
 
-  const allInterfaces = [
-    ...(networkData.physical_interfaces || []),
-    ...(networkData.bridge_interfaces || []),
-    ...(networkData.vm_lxc_interfaces || []),
-  ]
+  const physIfacesOfNode = (node?: string): NetworkInterface[] =>
+    onlineNodes.find((n) => n.node === node)?.data?.physical_interfaces ?? []
 
   const vmLxcInterfaces = [...mergedVmLxc].sort((a, b) => {
     const vmidA = a.vmid ?? Number.MAX_SAFE_INTEGER
@@ -706,11 +703,10 @@ export function NetworkMetrics() {
                         {interface_.bridge_physical_interface && (
                           <div className="text-sm text-blue-500 font-medium flex items-center gap-1 flex-wrap break-all">
                             → {interface_.bridge_physical_interface}
-                            {interface_.bridge_physical_interface.startsWith("bond") &&
-                              networkData.physical_interfaces && (
+                            {interface_.bridge_physical_interface.startsWith("bond") && (
                                 <>
                                   {(() => {
-                                    const bondInterface = networkData.physical_interfaces.find(
+                                    const bondInterface = physIfacesOfNode(interface_._node).find(
                                       (iface) => iface.name === interface_.bridge_physical_interface,
                                     )
                                     if (bondInterface?.bond_slaves && bondInterface.bond_slaves.length > 0) {
