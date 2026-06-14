@@ -133,11 +133,6 @@ const formatSpeed = (speed: number): string => {
   return `${speed} Mbps`
 }
 
-const fetcher = async (url: string): Promise<NetworkData> => {
-  return fetchApi<NetworkData>(url)
-}
-
-
 export function NetworkMetrics() {
   const {
     data: agg,
@@ -199,11 +194,6 @@ export function NetworkMetrics() {
     () => fetchAtNode<NetworkData>(selectedInterface!._node, selectedInterface!._node_is_self, "/api/network"),
     { refreshInterval: 17000, revalidateOnFocus: false, revalidateOnReconnect: true },
   )
-
-  const { data: interfaceHistoricalData } = useSWR<any>(`/api/node/metrics?timeframe=${timeframe}`, fetcher, {
-    refreshInterval: 29000,
-    revalidateOnFocus: false,
-  })
 
   if (isLoading) {
     return (
