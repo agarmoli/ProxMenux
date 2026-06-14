@@ -84,7 +84,7 @@ Replace the body of `fetchStorageData` (~222-240) with:
 
 - [ ] **Step 5: Derive per-node join + merged arrays + compat bindings**
 
-Immediately AFTER the loading guard (find the `if (loading) return ...` early-return in the render; if none exists, place this right before the first use of `storageData`/`proxmoxStorage`/`remoteMounts`, after all hooks), insert:
+Placement matters: `getDiskHealthBreakdown()`/`getDiskTypesBreakdown()` are CALLED (~593-594) and the `totalLocal*`/`totalRemote*`/`remoteStorageCount` derivations (~599-667) read `storageData`/`proxmoxStorage` BEFORE the `if (loading) return` guard (~669). So insert this block AFTER the two helper *definitions* (~512-578) and all hooks, but BEFORE the first use at ~line 593 — NOT after the loading guard. (Safe before data arrives: `storageAgg` is null → `perNode`/`onlineNodes`/`all*` are empty arrays and the compat `storageData`/`proxmoxStorage` are null, which the existing `if (!storageData…)` guards already handle.)
 ```ts
   // Join the three aggregator responses by node name (self is first).
   const perNode = (storageAgg?.nodes ?? []).map((s) => {
@@ -157,14 +157,14 @@ Switch the source array each list maps over:
 - [ ] **Step 2: Node-scoped React keys**
 
 Disk names (`sda`, `nvme0n1`) and storage names repeat across nodes. For each table's `.map`, change the row `key` to include the node:
-- disks: `` key={`${disk._node}:${disk.name}`} `` (apply in BOTH mobile and desktop variants, and the USB list)
+- disks: the `key` is on the OUTER wrapper `<div key={disk.name}>` (~line 1350) that holds both the mobile and desktop card variants — ONE key per disk, not one per variant. Change it to `` key={`${disk._node}:${disk.name}`} ``. Same for the USB list's outer `<div>` (~line 1564).
 - zfs: `` key={`${pool._node}:${pool.name}`} ``
-- proxmox: `` key={`${s._node}:${s.name}`} `` (match the existing iter var name)
+- proxmox: the iterator variable is `storage` (the table maps `.map((storage) => ...)` at ~line 915) — use `` key={`${storage._node}:${storage.name}`} ``
 - mounts: `` key={`${mount._node}:${mount.target}`} ``
 
 - [ ] **Step 3: Node badge per row (only when >1 node)**
 
-In each table row (disks mobile+desktop, zfs, proxmox, mounts), next to the name/title, add (mirrors `virtual-machines.tsx:1548-1550` — import `Server` from lucide if not already imported in this file):
+In each table row (disks mobile+desktop, zfs, proxmox, mounts), next to the name/title, add (mirrors `virtual-machines.tsx:1548-1550`):
 ```tsx
 {row._node && nodeNames.length > 1 && (
   <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
@@ -172,7 +172,7 @@ In each table row (disks mobile+desktop, zfs, proxmox, mounts), next to the name
   </Badge>
 )}
 ```
-(replace `row` with the actual iter variable: `disk`, `pool`, `s`, `mount`). Check the lucide import line (~5) already includes `Server`; it currently imports many icons — add `Server` if missing.
+(replace `row` with the actual iter variable: `disk`, `pool`, `storage`, `mount` respectively). `Server` is ALREADY imported on the lucide line (~5) — no import change needed.
 
 - [ ] **Step 4: Build + scoped tsc**
 
@@ -287,7 +287,8 @@ It receives the disk. Route via `disk._node`/`disk._node_is_self`:
 - DELETE `/api/storage/smart/${disk.name}/history/${filename}` (~4262)
 - GET `/api/storage/smart/${disk.name}/history/${filename}` download (~4273)
 - GET `/api/storage/smart/${disk.name}` report (~4296)
-All → `fetchAtNode(disk._node, disk._node_is_self, ...)`.
+- ALSO `fetchTempHistoryForReport(disk.name)` (~4300, inside `handleViewReport`) → routed via the signature change in Step 5 (pass `disk._node, disk._node_is_self`).
+The four direct `fetchApi` calls above → `fetchAtNode(disk._node, disk._node_is_self, ...)`.
 
 - [ ] **Step 4: Schedule tab — `ScheduleTab` (~4436-4767)**
 
@@ -298,9 +299,14 @@ All schedule calls route to the disk's node (each node owns its `/api/storage/sm
 - DELETE `/api/storage/smart/schedules/${id}` (~4518)
 All → `fetchAtNode(disk._node, disk._node_is_self, ...)`.
 
-- [ ] **Step 5: Overview-tab temperature-history-for-report fetch (~2370-2381)**
+- [ ] **Step 5: `fetchTempHistoryForReport` — module-level function used by TWO tabs**
 
-`/api/disk/${diskName}/temperature/history?...` → `fetchAtNode(selectedDisk?._node, selectedDisk?._node_is_self, ...)`.
+`fetchTempHistoryForReport` (~line 2370) is a MODULE-LEVEL `async function` (outside the component) that calls `fetchApi(\`/api/disk/${diskName}/temperature/history?...\`)`. `selectedDisk` is NOT in scope there, so you cannot route via `selectedDisk._node`. Instead:
+1. Change its signature to `async function fetchTempHistoryForReport(diskName: string, node?: string, isSelf?: boolean)`.
+2. Change its internal `fetchApi(...)` → `fetchAtNode(node, isSelf, \`/api/disk/${diskName}/temperature/history?...\`)`.
+3. Update BOTH call sites to pass the disk's node:
+   - `SmartTestTab` (~line 4210): `fetchTempHistoryForReport(disk.name, disk._node, disk._node_is_self)`.
+   - `HistoryTab.handleViewReport` (~line 4300): `fetchTempHistoryForReport(disk.name, disk._node, disk._node_is_self)`.
 
 - [ ] **Step 6: Build + scoped tsc**
 
