@@ -29,7 +29,7 @@ import {
   Server,
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
-import { API_PORT, fetchApi, fetchAtNode, nodeEndpoint, aggregateUrl, getApiUrl, getLocalApiUrl, getAuthToken, type AggregateResponse, type AggregateNode } from "@/lib/api-config"
+import { API_PORT, fetchApi, nodeEndpoint, aggregateUrl, getLocalApiUrl, getAuthToken, type AggregateResponse, type AggregateNode } from "@/lib/api-config"
 
 interface Backup {
   volid: string
@@ -137,7 +137,8 @@ export function SystemLogs() {
   // selected window — otherwise on a busy host the user sees "10 000"
   // when the host really has 438 000 entries. Fetched separately from
   // /api/logs/counts which runs three lightweight `wc -l` queries.
-  const [logsCounts, setLogsCounts] = useState<{ total: number; errors: number; warnings: number; info: number } | null>(null)
+  // Stored per-node so the node filter can re-sum on the fly.
+  const [countsByNode, setCountsByNode] = useState<{ node: string; total: number; errors: number; warnings: number; info: number }[]>([])
 
   // Single unified useEffect for all data loading
   // Fires on mount, when filters change, or when refresh is triggered
@@ -170,15 +171,16 @@ export function SystemLogs() {
         setBackups(onlineOf(backupsRes).flatMap((n) => tag(n.data?.backups, n)))
         setEvents(onlineOf(eventsRes).flatMap((n) => tag(n.data?.events, n)))
         setNotifications(onlineOf(notificationsRes).flatMap((n) => tag(n.data?.notifications, n)))
-        setLogsCounts(
-          countsRes.nodes.reduce(
-            (acc, n) => {
-              const c = n.data
-              if (c) { acc.total += c.total || 0; acc.errors += c.errors || 0; acc.warnings += c.warnings || 0; acc.info += c.info || 0 }
-              return acc
-            },
-            { total: 0, errors: 0, warnings: 0, info: 0 },
-          ),
+        setCountsByNode(
+          countsRes.nodes
+            .filter((n) => n.online)
+            .map((n) => ({
+              node: n.node,
+              total: n.data?.total ?? 0,
+              errors: n.data?.errors ?? 0,
+              warnings: n.data?.warnings ?? 0,
+              info: n.data?.info ?? 0,
+            })),
         )
       } catch (err) {
         if (cancelled) return
@@ -396,6 +398,14 @@ export function SystemLogs() {
   const onlineNodeNames = nodesMeta.filter((n) => n.online).map((n) => n.node)
   const offlineNodes = nodesMeta.filter((n) => !n.online)
 
+  const displayedCounts = useMemo(() => {
+    const src = nodeFilter ? countsByNode.filter((c) => c.node === nodeFilter) : countsByNode
+    return src.reduce(
+      (a, c) => ({ total: a.total + c.total, errors: a.errors + c.errors, warnings: a.warnings + c.warnings, info: a.info + c.info }),
+      { total: 0, errors: 0, warnings: 0, info: 0 },
+    )
+  }, [countsByNode, nodeFilter])
+
   const displayedLogs = filteredCombinedLogs.slice(0, displayedLogsCount)
   const hasMoreLogs = displayedLogsCount < filteredCombinedLogs.length
 
@@ -538,18 +548,21 @@ export function SystemLogs() {
     return type === "pbs" ? "PBS" : "PVE"
   }
 
-  const backupStats = {
-    total: backups.length,
-    totalSize: backups.reduce((sum, b) => sum + b.size, 0),
-    qemu: backups.filter((b) => {
-      // Check if volid contains /vm/ for QEMU or vzdump-qemu for PVE
-      return b.volid.includes("/vm/") || b.volid.includes("vzdump-qemu")
-    }).length,
-    lxc: backups.filter((b) => {
-      // Check if volid contains /ct/ for LXC or vzdump-lxc for PVE
-      return b.volid.includes("/ct/") || b.volid.includes("vzdump-lxc")
-    }).length,
-  }
+  const backupStats = useMemo(() => {
+    const src = backups.filter((b) => !nodeFilter || b._node === nodeFilter)
+    return {
+      total: src.length,
+      totalSize: src.reduce((sum, b) => sum + b.size, 0),
+      qemu: src.filter((b) => {
+        // Check if volid contains /vm/ for QEMU or vzdump-qemu for PVE
+        return b.volid.includes("/vm/") || b.volid.includes("vzdump-qemu")
+      }).length,
+      lxc: src.filter((b) => {
+        // Check if volid contains /ct/ for LXC or vzdump-lxc for PVE
+        return b.volid.includes("/ct/") || b.volid.includes("vzdump-lxc")
+      }).length,
+    }
+  }, [backups, nodeFilter])
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 B"
@@ -625,7 +638,7 @@ export function SystemLogs() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">
-              {(logsCounts?.total ?? 0).toLocaleString("fr-FR")}
+              {displayedCounts.total.toLocaleString("fr-FR")}
             </div>
             <p className="text-xs text-muted-foreground mt-2">In selected range</p>
           </CardContent>
@@ -637,7 +650,7 @@ export function SystemLogs() {
             <XCircle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-500">{(logsCounts?.errors ?? 0).toLocaleString("fr-FR")}</div>
+            <div className="text-2xl font-bold text-red-500">{displayedCounts.errors.toLocaleString("fr-FR")}</div>
             <p className="text-xs text-muted-foreground mt-2">Requires attention</p>
           </CardContent>
         </Card>
@@ -648,7 +661,7 @@ export function SystemLogs() {
             <AlertTriangle className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-500">{(logsCounts?.warnings ?? 0).toLocaleString("fr-FR")}</div>
+            <div className="text-2xl font-bold text-yellow-500">{displayedCounts.warnings.toLocaleString("fr-FR")}</div>
             <p className="text-xs text-muted-foreground mt-2">Monitor closely</p>
           </CardContent>
         </Card>
