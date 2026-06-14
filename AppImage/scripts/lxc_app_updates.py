@@ -210,3 +210,157 @@ def compare(installed, latest):
     if it is not None and lt is not None:
         return (lt > it, False)
     return ((installed or "").strip() != (latest or "").strip(), True)
+
+
+# ── installed version (inside the CT) ────────────────────────────────────
+def read_installed_version(vmid, installed_spec):
+    """Return (version|None, error|None). Runs a command/cat inside the CT."""
+    method = (installed_spec or {}).get("method")
+    value = (installed_spec or {}).get("value")
+    regex = (installed_spec or {}).get("regex") or r"(\d+\.\d+\.\d+)"
+    if not method or not value:
+        return None, "no installed spec"
+    try:
+        vmid_s = str(int(vmid))
+    except (TypeError, ValueError):
+        return None, "bad vmid"
+    if method == "file":
+        argv = [_PCT_BIN, "exec", vmid_s, "--", "cat", value]
+    else:
+        argv = [_PCT_BIN, "exec", vmid_s, "--", "sh", "-c", value]
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True,
+                           timeout=_EXEC_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return None, "timeout reading version"
+    except (FileNotFoundError, OSError) as e:
+        return None, str(e)
+    if r.returncode != 0:
+        err = (r.stderr or "").lower()
+        if "not running" in err or "stopped" in err:
+            return None, "container stopped"
+        return None, "version command failed"
+    ver = _extract(r.stdout, regex) or _extract(r.stderr, regex)
+    return (ver, None) if ver else (None, "could not parse version")
+
+
+# ── latest from GitHub ───────────────────────────────────────────────────
+def _gh_get(url, pat):
+    headers = {"User-Agent": "ProxMenux-Monitor/1.0",
+               "Accept": "application/vnd.github+json"}
+    if pat:
+        headers["Authorization"] = "Bearer " + pat
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT) as resp:
+        return json.loads(resp.read().decode("utf-8", errors="replace"))
+
+
+def fetch_latest(repo, github_source, tag_regex, pat=None):
+    """Return (version|None, error|None)."""
+    tag_regex = tag_regex or r"v?(\d+\.\d+\.\d+)"
+    try:
+        if github_source == "tags":
+            tags = _gh_get(
+                "https://api.github.com/repos/{}/tags?per_page=30".format(repo), pat)
+            for t in (tags or []):
+                ver = _extract((t or {}).get("name") or "", tag_regex)
+                if ver:
+                    return ver, None
+            return None, "no matching tag"
+        rel = _gh_get(
+            "https://api.github.com/repos/{}/releases/latest".format(repo), pat)
+        ver = _extract(rel.get("tag_name") or rel.get("name") or "", tag_regex)
+        return (ver, None) if ver else (None, "could not parse release")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None, "repo or release not found"
+        remaining = e.headers.get("X-RateLimit-Remaining") if e.headers else None
+        if e.code == 403 and remaining == "0":
+            return None, "github rate limited"
+        return None, "github http {}".format(e.code)
+    except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
+        return None, "github error: {}".format(e)
+
+
+# ── orchestration ────────────────────────────────────────────────────────
+def _store_result(vmid, result):
+    with _lock:
+        db = _read_db()
+        db.setdefault("results", {})[str(vmid)] = result
+        _write_db(db)
+
+
+def check_lxc_app(vmid, store=True):
+    assignment = get_assignment(vmid)
+    if not assignment:
+        return None
+    spec = _resolve_spec(assignment)
+    if not spec:
+        result = {"error": "unknown app", "last_check": _now_iso()}
+        if store:
+            _store_result(vmid, result)
+        return result
+    installed, ierr = read_installed_version(vmid, spec.get("installed"))
+    latest, lerr = fetch_latest(spec["repo"], spec["github_source"],
+                                spec.get("tag_regex"), _get_pat())
+    update_available, non_semver = False, False
+    if installed and latest:
+        update_available, non_semver = compare(installed, latest)
+    result = {
+        "app_id": spec["app_id"],
+        "name": spec.get("name"),
+        "repo": spec["repo"],
+        "installed": installed,
+        "latest": latest,
+        "update_available": update_available,
+        "non_semver": non_semver,
+        "error": ierr or lerr,
+        "last_check": _now_iso(),
+    }
+    if store:
+        _store_result(vmid, result)
+    return result
+
+
+def _is_stale(result, now):
+    if not result or not result.get("last_check"):
+        return True
+    try:
+        ts = datetime.fromisoformat(result["last_check"]).timestamp()
+    except ValueError:
+        return True
+    return (now - ts) >= _REFRESH_TTL
+
+
+def refresh_all(force=False):
+    now = time.time()
+    for vmid in list(list_assignments().keys()):
+        if force or _is_stale(_read_db().get("results", {}).get(vmid), now):
+            check_lxc_app(vmid, store=True)
+
+
+def _trigger_background_refresh():
+    with _lock:
+        if _refreshing["flag"]:
+            return
+        _refreshing["flag"] = True
+
+    def _run():
+        try:
+            refresh_all(force=False)
+        finally:
+            _refreshing["flag"] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def get_app_update_map():
+    """vmid -> cached result, for decorating /api/vms. Non-blocking: triggers a
+    background refresh when any assigned CT's result is missing/stale."""
+    db = _read_db()
+    results = db.get("results", {})
+    assignments = db.get("assignments", {})
+    now = time.time()
+    if any(_is_stale(results.get(v), now) for v in assignments):
+        _trigger_background_refresh()
+    return {v: results[v] for v in assignments if results.get(v)}

@@ -72,3 +72,63 @@ def test_version_tuple_and_compare(env):
 def test_extract_regex(env):
     assert lau._extract("Jellyfin 10.9.1 build", r"(\d+\.\d+\.\d+)") == "10.9.1"
     assert lau._extract("no version", r"(\d+\.\d+\.\d+)") is None
+
+
+from unittest.mock import patch, MagicMock
+import urllib.error
+
+
+def test_read_installed_version_command(env):
+    completed = MagicMock(returncode=0, stdout="Jellyfin 10.9.1\n", stderr="")
+    with patch("lxc_app_updates.subprocess.run", return_value=completed):
+        ver, err = lau.read_installed_version(
+            101, {"method": "command", "value": "jellyfin --version", "regex": r"(\d+\.\d+\.\d+)"})
+    assert ver == "10.9.1" and err is None
+
+
+def test_read_installed_version_stopped(env):
+    completed = MagicMock(returncode=2, stdout="", stderr="Container 101 is not running")
+    with patch("lxc_app_updates.subprocess.run", return_value=completed):
+        ver, err = lau.read_installed_version(
+            101, {"method": "command", "value": "x", "regex": r"(\d+)"})
+    assert ver is None and err == "container stopped"
+
+
+def test_fetch_latest_releases(env):
+    with patch("lxc_app_updates._gh_get", return_value={"tag_name": "v10.9.2"}):
+        ver, err = lau.fetch_latest("o/r", "releases", r"v?(\d+\.\d+\.\d+)")
+    assert ver == "10.9.2" and err is None
+
+
+def test_fetch_latest_tags_first_match(env):
+    tags = [{"name": "nightly"}, {"name": "v2.5.0"}, {"name": "v2.4.0"}]
+    with patch("lxc_app_updates._gh_get", return_value=tags):
+        ver, err = lau.fetch_latest("o/r", "tags", r"v(\d+\.\d+\.\d+)")
+    assert ver == "2.5.0" and err is None
+
+
+def test_fetch_latest_rate_limited(env):
+    err = urllib.error.HTTPError("u", 403, "forbidden",
+                                 {"X-RateLimit-Remaining": "0"}, None)
+    with patch("lxc_app_updates._gh_get", side_effect=err):
+        ver, e = lau.fetch_latest("o/r", "releases", r"(\d+)")
+    assert ver is None and e == "github rate limited"
+
+
+def test_fetch_latest_404(env):
+    err = urllib.error.HTTPError("u", 404, "nf", {}, None)
+    with patch("lxc_app_updates._gh_get", side_effect=err):
+        ver, e = lau.fetch_latest("o/r", "releases", r"(\d+)")
+    assert e == "repo or release not found"
+
+
+def test_check_lxc_app_end_to_end(env):
+    lau.set_assignment(101, {"app_id": "jellyfin"})
+    completed = MagicMock(returncode=0, stdout="10.9.1", stderr="")
+    with patch("lxc_app_updates.subprocess.run", return_value=completed), \
+         patch("lxc_app_updates._gh_get", return_value={"tag_name": "v10.9.2"}):
+        res = lau.check_lxc_app(101)
+    assert res["installed"] == "10.9.1"
+    assert res["latest"] == "10.9.2"
+    assert res["update_available"] is True
+    assert "101" in lau.get_app_update_map()
