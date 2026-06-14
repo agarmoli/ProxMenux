@@ -22,7 +22,6 @@ import { getApiUrl, fetchApi, getActiveNode, setActiveNode, getLocalApiUrl } fro
 import { TerminalPanel } from "./terminal-panel"
 import { AvatarMenu } from "./avatar-menu"
 import { ClusterOverview } from "./cluster-overview"
-import { ClusterVms } from "./cluster-vms"
 import { NodeSelector } from "./node-selector"
 import {
   RefreshCw,
@@ -837,7 +836,6 @@ export function ProxmoxDashboard() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
           <TabsContent value="cluster" className="space-y-4 md:space-y-6 mt-0">
             <ClusterOverview key={`cluster-${componentKey}`} />
-            <ClusterVms key={`cluster-vms-${componentKey}`} />
           </TabsContent>
 
           <TabsContent value="overview" className="space-y-4 md:space-y-6 mt-0">
