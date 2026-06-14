@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { getAuthToken, aggregateUrl, getLocalApiUrl, nodeEndpoint, type AggregateResponse, type AggregateNode } from "@/lib/api-config"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
@@ -129,6 +129,7 @@ export function HealthStatusModal({ open, onOpenChange, getApiUrl }: HealthStatu
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [perNodeHealth, setPerNodeHealth] = useState<AggregateNode<FullHealthData>[]>([])
   const [selectedHealthNode, setSelectedHealthNode] = useState<string | null>(null)
+  const selectedHealthNodeRef = useRef<string | null>(null)
 
   const fetchHealthDetails = useCallback(async () => {
     setLoading(true)
@@ -152,8 +153,9 @@ export function HealthStatusModal({ open, onOpenChange, getApiUrl }: HealthStatu
         (worst, n) => (!worst || rankOf(n) > rankOf(worst) ? n : worst),
         null,
       )
-      const chosen = online.find((n) => n.node === selectedHealthNode) || worstNode || online[0] || null
+      const chosen = online.find((n) => n.node === selectedHealthNodeRef.current) || worstNode || online[0] || null
       setSelectedHealthNode(chosen?.node ?? null)
+      selectedHealthNodeRef.current = chosen?.node ?? null
       setHealthData(chosen?.data?.health ?? null)
       setDismissedItems(chosen?.data?.dismissed ?? [])
       setCustomSuppressions(chosen?.data?.custom_suppressions ?? [])
@@ -184,7 +186,7 @@ export function HealthStatusModal({ open, onOpenChange, getApiUrl }: HealthStatu
     } finally {
       setLoading(false)
     }
-  }, [getApiUrl, selectedHealthNode])
+  }, [getApiUrl])
 
   // Tick counter to force re-render every 30s so "X minutes ago" stays current
   const [, setTick] = useState(0)
@@ -349,6 +351,7 @@ export function HealthStatusModal({ open, onOpenChange, getApiUrl }: HealthStatu
     const n = perNodeHealth.find((x) => x.node === nodeName)
     if (!n) return
     setSelectedHealthNode(nodeName)
+    selectedHealthNodeRef.current = nodeName
     setHealthData(n.data?.health ?? null)
     setDismissedItems(n.data?.dismissed ?? [])
     setCustomSuppressions(n.data?.custom_suppressions ?? [])
@@ -367,6 +370,7 @@ export function HealthStatusModal({ open, onOpenChange, getApiUrl }: HealthStatu
 
     try {
       const ackNode = perNodeHealth.find((x) => x.node === selectedHealthNode)
+      if (!ackNode) { setDismissingKey(null); return }
       const url = getLocalApiUrl(nodeEndpoint(ackNode?.node, ackNode?.is_self, "/api/health/acknowledge"))
       const token = getAuthToken()
       const headers: Record<string, string> = { "Content-Type": "application/json" }
@@ -403,9 +407,9 @@ export function HealthStatusModal({ open, onOpenChange, getApiUrl }: HealthStatu
           // Surface the chosen duration so the row shows the right badge
           // (countdown vs. "Permanent") without waiting for the refetch.
           permanent: suppressionHours === -1,
-          suppression_remaining_hours: suppressionHours === -1 ? -1 : undefined,
+          suppression_remaining_hours: suppressionHours === -1 ? -1 : (suppressionHours ?? 24),
           suppression_hours: suppressionHours,
-          acknowledged_at: new Date().toISOString(),
+          resolved_at: new Date().toISOString(),
         }
         setDismissedItems(prev => [...prev, dismissedItem])
       }
@@ -635,7 +639,7 @@ export function HealthStatusModal({ open, onOpenChange, getApiUrl }: HealthStatu
               <div className="flex items-center gap-1.5 mb-3 flex-wrap">
                 {perNodeHealth.map((n) => {
                   const st = (n.data?.health?.overall || "OK").toUpperCase()
-                  const dot = st === "CRITICAL" ? "bg-red-500" : st === "WARNING" ? "bg-yellow-500" : "bg-green-500"
+                  const dot = st === "CRITICAL" ? "bg-red-500" : st === "WARNING" ? "bg-yellow-500" : st === "UNKNOWN" ? "bg-amber-500" : "bg-green-500"
                   const active = n.node === selectedHealthNode
                   return (
                     <button
