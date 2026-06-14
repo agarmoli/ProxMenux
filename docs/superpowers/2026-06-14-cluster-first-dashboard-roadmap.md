@@ -48,14 +48,23 @@ http/https, `fetchAtNode`/`getLocalApiUrl` en `lib/api-config.ts`).
 
 ## Fases (cada una instalable y útil por separado)
 
-1. **Agregador genérico** `/api/federation/aggregate` (+ tests pytest). Pieza base.
-2. **Selector → filtro global "Todos"** (default Todos) + contexto/estado que leen las vistas.
-3. **Overview combinado** como landing.
-4. **Storage** unificado (columna Nodo).
-5. **Network** unificado (columna Nodo).
-6. **Logs** unificado (merge por tiempo + Nodo).
-7. **Health** unificado.
-8. **Hardware** apilado por nodo; **Terminal** y **config por-nodo** con su propio picker.
+> **Reorden acordado (2026-06-14):** cada vista se migra con su **filtro local** (como
+> VMs/Network); la **conversión del selector global** a filtro reactivo se deja para el
+> **final**, cuando todas las vistas ya pintan todos los nodos. El piloto fue **Network**
+> (no Storage: Storage es la pestaña más pesada — ~15 call-sites de drill-down + acciones
+> + config SMART por-nodo — y se trata como fase dedicada).
+
+1. ✅ **Agregador genérico** `/api/federation/aggregate` (+ pytest) **+ piloto Network**
+   (tabla all-nodes con columna Nodo + filtro local + drill-down enrutado por `fetchAtNode`;
+   resumen sigue-al-filtro). *Hecho — specs/plans en `docs/superpowers/`.*
+2. **Storage** unificado — fase dedicada (presupuestar ~15 call-sites + semántica de
+   schedules/tools por-nodo).
+3. **Logs** unificado (merge por tiempo + Nodo).
+4. **Health** unificado.
+5. **Hardware** apilado por nodo.
+6. **Overview combinado** como landing.
+7. **(Final) Selector global → filtro reactivo** (matar `reload`+proxy-todo).
+   **Terminal** y **config por-nodo** mantienen su propio picker dentro de la pestaña.
 
 Cada fase = brainstorm corto → spec → plan → implementar → rebuild → instalar.
 
@@ -65,13 +74,20 @@ Cada fase = brainstorm corto → spec → plan → implementar → rebuild → i
 - Detección de updates de apps LXC (catálogo + custom, `pct exec` + GitHub).
 - VMs & LXC "Todos los nodos" con gestión in-place (`fetchAtNode`); consola remota
   deshabilitada; filtro por nodo.
+- **Fase 1 ✅:** agregador genérico `/api/federation/aggregate` (8 tests pytest, suite 61
+  verde) + **Network** convertido a all-nodes (columna Nodo, filtro local, drill-down
+  enrutado, resumen sigue-al-filtro, paridad single-node). Revisión final: SHIP-READY.
 - Specs/planes en `docs/superpowers/specs|plans/`.
 
 ## Punto de arranque exacto para la próxima sesión
 
-1. (Antes) Validar que el build actual arranca/funciona en los 2 nodos (reinstalar con
-   reinicio limpio; si crashea, capturar `./AppRun` traceback — único pendiente abierto).
-2. **Brainstorm de la Fase 1** (agregador genérico) + confirmar el modelo selector-como-filtro.
-3. De ahí, fases 3-8 en orden, reutilizando el agregador.
+1. (Antes — gate manual de la Fase 1) Rebuild AppImage (`AppImage/scripts/build_appimage.sh`)
+   + instalar en los 2 nodos y comprobar la pestaña Network: interfaces de ambos con
+   columna Nodo, chips de filtro, drill-down de interfaz remota correcto, nodo parado como
+   "offline". Si `./AppRun` crashea (cabo suelto previo), capturar el traceback.
+2. **Brainstorm de la Fase 2** (Storage unificado) — su propia fase, reutilizando el
+   agregador; presupuestar los ~15 call-sites de drill-down + semántica schedules/tools.
+3. De ahí, fases 3-6 (Logs/Health/Hardware/Overview) reutilizando el agregador, y la
+   fase 7 final (selector global → filtro reactivo).
 
 > Nada se pierde entre sesiones: todo está commiteado en `feature/federation` y documentado aquí.
