@@ -29,7 +29,7 @@ import {
   Server,
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
-import { API_PORT, fetchApi, fetchAtNode, nodeEndpoint, aggregateUrl, getApiUrl, getAuthToken, type AggregateResponse, type AggregateNode } from "@/lib/api-config"
+import { API_PORT, fetchApi, fetchAtNode, nodeEndpoint, aggregateUrl, getApiUrl, getLocalApiUrl, getAuthToken, type AggregateResponse, type AggregateNode } from "@/lib/api-config"
 
 interface Backup {
   volid: string
@@ -283,7 +283,7 @@ export function SystemLogs() {
           const headers: Record<string, string> = {}
           if (token) headers["Authorization"] = `Bearer ${token}`
           const taskLogPath = `/api/task-log/${encodeURIComponent(upid)}`
-          const taskLogUrl = getApiUrl(nodeEndpoint(notification._node, notification._node_is_self, taskLogPath))
+          const taskLogUrl = getLocalApiUrl(nodeEndpoint(notification._node, notification._node_is_self, taskLogPath))
           const resp = await fetch(taskLogUrl, { headers, cache: "no-store" })
           if (!resp.ok) {
             throw new Error(`task-log fetch failed: ${resp.status}`)
@@ -680,6 +680,27 @@ export function SystemLogs() {
           </div>
         </CardHeader>
         <CardContent className="max-w-full overflow-hidden">
+          {onlineNodeNames.length > 1 && (
+            <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+              <button
+                onClick={() => setNodeFilter(null)}
+                className={`text-xs px-2 py-0.5 rounded-full border ${nodeFilter === null ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
+              >All</button>
+              {onlineNodeNames.map((nn) => (
+                <button
+                  key={nn}
+                  onClick={() => setNodeFilter(nn)}
+                  className={`text-xs px-2 py-0.5 rounded-full border ${nodeFilter === nn ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
+                >{nn}</button>
+              ))}
+            </div>
+          )}
+          {offlineNodes.map((n) => (
+            <div key={n.node} className="flex items-center gap-2 text-xs text-muted-foreground border border-border rounded-md px-2 py-1 mb-1">
+              <AlertTriangle className="h-3 w-3 text-yellow-500" />
+              {n.node} — offline{n.error ? ` (${n.error})` : ""}
+            </div>
+          ))}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full max-w-full">
             <TabsList className="hidden md:grid w-full grid-cols-3">
               <TabsTrigger value="logs" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white">
@@ -772,27 +793,6 @@ export function SystemLogs() {
 
             {/* Logs Tab - Ahora incluye logs y eventos unificados */}
             <TabsContent value="logs" className="space-y-4 max-w-full overflow-hidden">
-              {onlineNodeNames.length > 1 && (
-                <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-                  <button
-                    onClick={() => setNodeFilter(null)}
-                    className={`text-xs px-2 py-0.5 rounded-full border ${nodeFilter === null ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
-                  >All</button>
-                  {onlineNodeNames.map((nn) => (
-                    <button
-                      key={nn}
-                      onClick={() => setNodeFilter(nn)}
-                      className={`text-xs px-2 py-0.5 rounded-full border ${nodeFilter === nn ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
-                    >{nn}</button>
-                  ))}
-                </div>
-              )}
-              {offlineNodes.map((n) => (
-                <div key={n.node} className="flex items-center gap-2 text-xs text-muted-foreground border border-border rounded-md px-2 py-1 mb-1">
-                  <AlertTriangle className="h-3 w-3 text-yellow-500" />
-                  {n.node} — offline{n.error ? ` (${n.error})` : ""}
-                </div>
-              ))}
               <div className="flex flex-col sm:flex-row gap-4 max-w-full">
                 <div className="flex-1 min-w-0">
                   <div className="relative">
