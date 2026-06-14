@@ -18,7 +18,7 @@ import { MetricsView } from "./metrics-dialog"
 import { LxcTerminalModal } from "./lxc-terminal-modal"
 import { formatStorage } from "../lib/utils"
 import { formatNetworkTraffic, getNetworkUnit } from "../lib/format-network"
-import { fetchApi } from "../lib/api-config"
+import { fetchApi, fetchAtNode } from "../lib/api-config"
 import { LxcAppPanel, renderAppUpdateBadge, type AppUpdate } from "./lxc-app-panel"
 import DOMPurify from "dompurify"
 import { marked } from "marked"
@@ -62,6 +62,8 @@ interface VMData {
   ip?: string
   update_check?: LxcUpdateCheck
   app_update?: AppUpdate
+  _node?: string
+  _node_is_self?: boolean
 }
 
 interface VMConfig {
@@ -596,13 +598,17 @@ export function VirtualMachines() {
     error,
     isLoading,
     mutate,
-  } = useSWR<VMData[]>("/api/vms", fetcher, {
-    refreshInterval: 2500,
-    revalidateOnFocus: true,
-    revalidateOnReconnect: true,
-    dedupingInterval: 1000,
-    errorRetryCount: 2,
-  })
+  } = useSWR<VMData[]>(
+    "/api/federation/vms",
+    (url: string) => fetchApi<{ vms: VMData[] }>(url).then((d) => d.vms || []),
+    {
+      refreshInterval: 8000,
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+      dedupingInterval: 2000,
+      errorRetryCount: 2,
+    },
+  )
 
   const [selectedVM, setSelectedVM] = useState<VMData | null>(null)
   const [vmDetails, setVMDetails] = useState<VMDetails | null>(null)
