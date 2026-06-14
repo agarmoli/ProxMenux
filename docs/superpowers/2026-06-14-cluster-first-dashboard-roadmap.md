@@ -63,7 +63,10 @@ http/https, `fetchAtNode`/`getLocalApiUrl` en `lib/api-config.ts`).
    disco). *Hecho — spec/plan en `docs/superpowers/`. Revisión final: SHIP-READY.*
    *(Limitación conocida pre-existente: si el `/api/storage` del nodo central falla, el
    guard de error tapa la pestaña aunque haya peers sanos — pendiente para más adelante.)*
-3. **Logs** unificado (merge por tiempo + Nodo).
+3. ✅ **Logs** unificado — logs/events/notifications/backups **merge por tiempo** entre
+   nodos + badge Nodo + filtro de cluster (chips sobre los tabs); count cards y backup
+   stats **sumados y filtro-aware**; task-log download enrutado al nodo; **cero backend**.
+   *Hecho — plan en `docs/superpowers/plans/`. Revisión final: SHIP-READY.*
 4. **Health** unificado.
 5. **Hardware** apilado por nodo.
 6. **Overview combinado** como landing.
@@ -82,20 +85,21 @@ Cada fase = brainstorm corto → spec → plan → implementar → rebuild → i
   verde) + **Network** convertido a all-nodes (columna Nodo, filtro local, drill-down
   enrutado, resumen sigue-al-filtro, paridad single-node). Revisión final: SHIP-READY.
 - **Fase 2 ✅:** **Storage** convertido a all-nodes (4 tablas con columna Nodo, filtro,
-  resumen por-nodo, modal de disco enrutado por `fetchAtNode`, cero backend). Revisión
-  final: SHIP-READY. Ambas fases solo en código (frontend); falta el gate manual en nodos.
+  resumen por-nodo, modal de disco enrutado por `fetchAtNode`, cero backend). SHIP-READY.
+- **Fase 3 ✅:** **Logs** convertido a all-nodes (merge por tiempo, badge Nodo, filtro de
+  cluster sobre los tabs, counts/backup-stats filtro-aware, task-log enrutado, cero
+  backend). SHIP-READY. Las 3 fases solo en código (frontend); falta el gate manual en nodos.
 - Specs/planes en `docs/superpowers/specs|plans/`.
 
 ## Punto de arranque exacto para la próxima sesión
 
-1. (Antes — gate manual de Fases 1+2) Rebuild AppImage (`AppImage/scripts/build_appimage.sh`,
-   en un nodo — necesita `libupsclient`, ausente en WSL) + instalar en los 2 nodos y
-   comprobar **Network** (interfaces de ambos, filtro, drill-down remoto, nodo offline) y
-   **Storage** (discos/ZFS/PVE-storage/mounts de ambos con columna Nodo, abrir disco remoto
-   → SMART/temperatura/schedule del nodo correcto). Si `./AppRun` crashea, capturar traceback.
-2. **Brainstorm de la Fase 3** (Logs unificado: merge por tiempo + columna Nodo),
-   reutilizando el agregador, mismo patrón que Network/Storage.
-3. De ahí, fases 4-6 (Health/Hardware/Overview) y la fase 7 final (selector global →
-   filtro reactivo; resolver de paso el guard de error del nodo central de Storage).
+1. (Antes — gate manual de Fases 1+2+3) Rebuild AppImage (`AppImage/scripts/build_appimage.sh`,
+   en un nodo — necesita `libupsclient`, ausente en WSL) + instalar en los 2 nodos y comprobar
+   **Network**, **Storage** y **Logs** (entradas de ambos nodos intercaladas por tiempo + badge
+   Nodo + chips de filtro; abrir disco/evento remoto → datos del nodo correcto; nodo parado
+   como "offline"; single-node idéntico a hoy). Si `./AppRun` crashea, capturar traceback.
+2. **Fase 4 (Health unificado)** — mismo patrón, reutilizando el agregador (probablemente
+   directa sin brainstorm como Logs). Luego Hardware/Overview y la fase 7 final (selector
+   global → filtro reactivo; resolver de paso el guard de error del nodo central de Storage).
 
 > Nada se pierde entre sesiones: todo está commiteado en `feature/federation` y documentado aquí.
