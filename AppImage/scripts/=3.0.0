@@ -1,14 +1,14 @@
 Collecting gevent
   Downloading gevent-26.5.0-cp310-cp310-manylinux_2_28_x86_64.whl (2.2 MB)
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.2/2.2 MB 49.5 MB/s eta 0:00:00
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.2/2.2 MB 21.7 MB/s eta 0:00:00
 Collecting gevent-websocket
   Downloading gevent_websocket-0.10.1-py3-none-any.whl (22 kB)
 Collecting greenlet
   Downloading greenlet-3.5.1-cp310-cp310-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (612 kB)
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 612.9/612.9 KB 162.5 MB/s eta 0:00:00
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 612.9/612.9 KB 126.1 MB/s eta 0:00:00
 Collecting zope.interface
   Downloading zope_interface-8.5-cp310-cp310-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl (259 kB)
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 259.8/259.8 KB 112.3 MB/s eta 0:00:00
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 259.8/259.8 KB 87.7 MB/s eta 0:00:00
 Collecting zope.event
   Downloading zope_event-6.2-py3-none-any.whl (6.5 kB)
 Installing collected packages: zope.interface, zope.event, greenlet, gevent, gevent-websocket
