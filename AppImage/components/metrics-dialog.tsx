@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts"
-import { fetchApi } from "@/lib/api-config"
+import { fetchApi, fetchAtNode } from "@/lib/api-config"
 
 interface MetricsViewProps {
   vmid: number
   vmName: string
   vmType: "qemu" | "lxc"
+  node?: string
+  isSelf?: boolean
   onBack: () => void
 }
 
@@ -102,7 +104,7 @@ const CustomNetworkTooltip = ({ active, payload, label }: any) => {
   return null
 }
 
-export function MetricsView({ vmid, vmName, vmType, onBack }: MetricsViewProps) {
+export function MetricsView({ vmid, vmName, vmType, node, isSelf, onBack }: MetricsViewProps) {
   const [timeframe, setTimeframe] = useState("week")
   const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -119,7 +121,7 @@ export function MetricsView({ vmid, vmName, vmType, onBack }: MetricsViewProps) 
     setError(null)
 
     try {
-      const result = await fetchApi<any>(`/api/vms/${vmid}/metrics?timeframe=${timeframe}`)
+      const result = await fetchAtNode<any>(node, isSelf, `/api/vms/${vmid}/metrics?timeframe=${timeframe}`)
 
       const transformedData = result.data.map((item: any) => {
         const date = new Date(item.time * 1000)

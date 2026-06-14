@@ -3136,6 +3136,8 @@ const handleDownloadLogs = async (vmid: number, vmName: string) => {
                 vmid={selectedVM.vmid}
                 vmName={selectedVM.name}
                 vmType={selectedVM.type as "qemu" | "lxc"}
+                node={selectedVM._node}
+                isSelf={selectedVM._node_is_self}
                 onBack={handleBackToMain}
               />
             )
