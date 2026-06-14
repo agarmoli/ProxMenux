@@ -67,7 +67,12 @@ http/https, `fetchAtNode`/`getLocalApiUrl` en `lib/api-config.ts`).
    nodos + badge Nodo + filtro de cluster (chips sobre los tabs); count cards y backup
    stats **sumados y filtro-aware**; task-log download enrutado al nodo; **cero backend**.
    *Hecho — plan en `docs/superpowers/plans/`. Revisión final: SHIP-READY.*
-4. **Health** unificado.
+4. ✅ **Health** unificado — indicador del header = **peor estado** del cluster + info
+   **sumado**; modal con **picker de nodo** (por defecto el peor) reutilizando el render
+   existente; acknowledge enrutado por nodo; `.status` lo gobierna la salud del cluster.
+   **Cero backend.** *Hecho — plan en `docs/superpowers/plans/`. Reviews por-tarea OK
+   (cazaron: ciclo de fetch, NaN months, guard de ack offline, carrera de status).
+   Pendiente: review final cross-cutting (interrumpida) + gate manual.*
 5. **Hardware** apilado por nodo.
 6. **Overview combinado** como landing.
 7. **(Final) Selector global → filtro reactivo** (matar `reload`+proxy-todo).
@@ -86,20 +91,24 @@ Cada fase = brainstorm corto → spec → plan → implementar → rebuild → i
   enrutado, resumen sigue-al-filtro, paridad single-node). Revisión final: SHIP-READY.
 - **Fase 2 ✅:** **Storage** convertido a all-nodes (4 tablas con columna Nodo, filtro,
   resumen por-nodo, modal de disco enrutado por `fetchAtNode`, cero backend). SHIP-READY.
-- **Fase 3 ✅:** **Logs** convertido a all-nodes (merge por tiempo, badge Nodo, filtro de
-  cluster sobre los tabs, counts/backup-stats filtro-aware, task-log enrutado, cero
-  backend). SHIP-READY. Las 3 fases solo en código (frontend); falta el gate manual en nodos.
+- **Fase 3 ✅:** **Logs** all-nodes (merge por tiempo, badge Nodo, filtro de cluster sobre
+  los tabs, counts/backup-stats filtro-aware, task-log enrutado, cero backend). SHIP-READY.
+- **Fase 4 ✅ (código):** **Health** all-nodes (header peor-estado+info sumado, modal con
+  picker de nodo, acknowledge enrutado). Reviews por-tarea OK; **falta la review final
+  cross-cutting** (se interrumpió). Las 4 fases solo en código; falta el gate manual en nodos.
 - Specs/planes en `docs/superpowers/specs|plans/`.
 
 ## Punto de arranque exacto para la próxima sesión
 
-1. (Antes — gate manual de Fases 1+2+3) Rebuild AppImage (`AppImage/scripts/build_appimage.sh`,
-   en un nodo — necesita `libupsclient`, ausente en WSL) + instalar en los 2 nodos y comprobar
-   **Network**, **Storage** y **Logs** (entradas de ambos nodos intercaladas por tiempo + badge
-   Nodo + chips de filtro; abrir disco/evento remoto → datos del nodo correcto; nodo parado
-   como "offline"; single-node idéntico a hoy). Si `./AppRun` crashea, capturar traceback.
-2. **Fase 4 (Health unificado)** — mismo patrón, reutilizando el agregador (probablemente
-   directa sin brainstorm como Logs). Luego Hardware/Overview y la fase 7 final (selector
-   global → filtro reactivo; resolver de paso el guard de error del nodo central de Storage).
+1. (Pequeño pendiente de código) Correr la **review final cross-cutting de Health** (modal↔header
+   consistentes, sin fetches a medio migrar, paridad single-node) — es lo único que quedó a
+   medias al cerrar. El diff vive en commits `dd1368ce..a8f91898`.
+2. (Gate manual de Fases 1-4) Rebuild AppImage (`AppImage/scripts/build_appimage.sh`, en un
+   nodo — necesita `libupsclient`, ausente en WSL) + instalar en los 2 nodos y comprobar
+   **Network / Storage / Logs / Health** (datos de ambos nodos; abrir disco/evento/nodo remoto
+   → datos correctos; header de salud = peor del cluster; nodo parado "offline"; single-node
+   idéntico a hoy). Si `./AppRun` crashea, capturar traceback.
+3. **Fase 5 (Hardware apilado por nodo)** — mismo patrón. Luego Overview y la fase 7 final
+   (selector global → filtro reactivo; resolver de paso el guard de error del central de Storage).
 
 > Nada se pierde entre sesiones: todo está commiteado en `feature/federation` y documentado aquí.
