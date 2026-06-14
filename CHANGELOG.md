@@ -1,4 +1,12 @@
 
+## 2026-06-14
+
+### LXC app update detection — installed vs latest on GitHub
+
+Each LXC can be assigned an application (a curated catalog entry, or a custom GitHub repo plus a command/file to read the installed version). The Monitor reads the installed version inside the container via `pct exec` and compares it to the latest GitHub release/tag, surfacing an "installed → latest ⬆" chip on the container row and an **App** tab in the LXC modal to manage the assignment and re-check on demand. New endpoints `/api/lxc-app-catalog`, `/api/vms/<id>/app[/check]` and `/api/lxc-app/settings`, plus an `app_update` field on `/api/vms` that aggregates through federation. Detection only — it never applies updates. An optional GitHub token (stored in a `0600` file, never returned to the browser) raises the API rate limit.
+
+---
+
 ## 2026-06-13
 
 ### Cluster federation — one dashboard for every node of a Proxmox cluster

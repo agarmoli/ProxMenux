@@ -113,6 +113,15 @@ central node aggregates them over the existing authenticated API (TLS verified
 against the Proxmox cluster CA). The web terminal stays available only on the
 node you are connected to. With no peers configured the dashboard is unchanged.
 
+**LXC app update detection:**
+
+Assign an application to an LXC — pick from a curated list or enter a custom
+GitHub repo + a command/file to read the installed version — and the dashboard
+shows the installed version vs the latest GitHub release/tag on each container,
+flagging when an update is available. Detection only: it never applies updates.
+An optional GitHub token raises the API rate limit. Works through federation
+(the info rides `/api/vms`).
+
 ---
 
 ## 🧪 Beta Program
