@@ -19,6 +19,7 @@ import { LxcTerminalModal } from "./lxc-terminal-modal"
 import { formatStorage } from "../lib/utils"
 import { formatNetworkTraffic, getNetworkUnit } from "../lib/format-network"
 import { fetchApi } from "../lib/api-config"
+import { LxcAppPanel, renderAppUpdateBadge, type AppUpdate } from "./lxc-app-panel"
 import DOMPurify from "dompurify"
 import { marked } from "marked"
 
@@ -60,6 +61,7 @@ interface VMData {
   diskwrite?: number
   ip?: string
   update_check?: LxcUpdateCheck
+  app_update?: AppUpdate
 }
 
 interface VMConfig {
@@ -646,7 +648,7 @@ export function VirtualMachines() {
   const [backupPbsChangeMode, setBackupPbsChangeMode] = useState<string>("default")
   
   // Tab state for modal
-  const [activeModalTab, setActiveModalTab] = useState<"status" | "mounts" | "backups" | "updates" | "firewall">("status")
+  const [activeModalTab, setActiveModalTab] = useState<"status" | "mounts" | "backups" | "updates" | "firewall" | "application">("status")
 
   // Firewall log state — fetched only when the operator opens that tab
   // so a CT/VM without firewall use doesn't pay the pvesh cost on every
@@ -1528,6 +1530,7 @@ const handleDownloadLogs = async (vmid: number, vmName: string) => {
                         )}
                         <span className="text-sm text-muted-foreground ml-auto">Uptime: {formatUptime(vm.uptime)}</span>
                         {vm.type === "lxc" && renderLxcUpdateBadge(vm.update_check)}
+                        {vm.type === "lxc" && renderAppUpdateBadge(vm.app_update)}
                       </div>
 
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -1641,6 +1644,7 @@ const handleDownloadLogs = async (vmid: number, vmName: string) => {
                           <div className="font-semibold text-foreground truncate flex items-center gap-1.5">
                             <span className="truncate">{vm.name}</span>
                             {vm.type === "lxc" && renderLxcUpdateBadge(vm.update_check, true)}
+                            {vm.type === "lxc" && renderAppUpdateBadge(vm.app_update, true)}
                           </div>
                           <div className="text-[10px] text-muted-foreground">ID: {vm.vmid}</div>
                         </div>
@@ -1753,6 +1757,12 @@ const handleDownloadLogs = async (vmid: number, vmName: string) => {
                               false,
                               () => setActiveModalTab("updates"),
                             )}
+                          {selectedVM.type === "lxc" &&
+                            renderAppUpdateBadge(
+                              selectedVM.app_update,
+                              false,
+                              () => setActiveModalTab("application"),
+                            )}
                         </div>
                       </>
                     )}
@@ -1783,6 +1793,12 @@ const handleDownloadLogs = async (vmid: number, vmName: string) => {
                             selectedVM.update_check,
                             false,
                             () => setActiveModalTab("updates"),
+                          )}
+                        {selectedVM.type === "lxc" &&
+                          renderAppUpdateBadge(
+                            selectedVM.app_update,
+                            false,
+                            () => setActiveModalTab("application"),
                           )}
                       </div>
                     )}
@@ -1884,6 +1900,21 @@ const handleDownloadLogs = async (vmid: number, vmName: string) => {
                         {selectedVM.update_check.count}
                       </Badge>
                     )}
+                  </button>
+                )}
+                {selectedVM?.type === "lxc" && (
+                  <button
+                    onClick={() => setActiveModalTab("application")}
+                    className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap shrink-0 ${
+                      activeModalTab === "application"
+                        ? "border-amber-500 text-amber-500"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Package className="h-4 w-4" />
+                    <span className={activeModalTab === "application" ? "" : "hidden sm:inline"}>
+                      App
+                    </span>
                   </button>
                 )}
                 {/* Firewall tab — issue #14554 from the helper-scripts
@@ -2777,6 +2808,14 @@ const handleDownloadLogs = async (vmid: number, vmName: string) => {
                       </Card>
                     </div>
                   )}
+
+                {activeModalTab === "application" && selectedVM && (
+                  <LxcAppPanel
+                    vmid={selectedVM.vmid}
+                    appUpdate={selectedVM.app_update}
+                    onChanged={() => mutate()}
+                  />
+                )}
 
                 {/* Sprint 13.29: Mount Points Tab — LXC only.
                     Renders configured mpX entries first, then any
