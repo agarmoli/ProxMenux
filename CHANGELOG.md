@@ -5,7 +5,7 @@
 
 Each LXC can be assigned an application (a curated catalog entry, or a custom GitHub repo plus a command/file to read the installed version). The Monitor reads the installed version inside the container via `pct exec` and compares it to the latest GitHub release/tag, surfacing an "installed → latest ⬆" chip on the container row and an **App** tab in the LXC modal to manage the assignment and re-check on demand. New endpoints `/api/lxc-app-catalog`, `/api/vms/<id>/app[/check]` and `/api/lxc-app/settings`, plus an `app_update` field on `/api/vms` that aggregates through federation. Detection only — it never applies updates. An optional GitHub token (stored in a `0600` file, never returned to the browser) raises the API rate limit.
 
-- **Cluster — unified guests list:** the Cluster tab now lists every VM/LXC of every node in one table (node column, status, CPU/RAM, LXC update/app badges); clicking a row drills into that node. Reuses the existing `/api/federation/vms` aggregation — no backend change.
+- **Cluster — all-nodes VM management:** the VMs & LXCs tab now lists every guest of every node at once (Node badge + per-node filter) and manages any of them in place — details, metrics, logs, backups, start/stop, notes and LXC app assignment are routed to each guest's own node via the reverse proxy. The web console remains node-local. Replaces the earlier read-only cluster guests table.
 
 ---
 
