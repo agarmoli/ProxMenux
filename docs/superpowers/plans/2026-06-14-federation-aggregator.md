@@ -514,6 +514,14 @@ git commit -m "feat(network): all-nodes interface tables with Node badge + local
 
 ## Task 5: Frontend — per-node summary (traffic / counts / latency) routed via `fetchAtNode`
 
+> **IMPLEMENTED DIFFERENTLY (see spec).** Rendering the summary once *per node* inside a
+> `map` would call `useSWR` in a loop — a Rules-of-Hooks violation — and require extracting
+> a heavily-entangled child component. Instead the summary **follows the node filter**: a
+> single summary reflecting the filtered node (or the central/first node under "All"),
+> labeled when multi-node, with its latency/metrics routed via one `useSWR` whose target is
+> the `summaryNode` (a legal single dynamic hook). Done together with Task 6 in commit
+> `3216022b` (+ fix `8bd7b72b`). The steps below are kept for historical context.
+
 The node-global widgets (traffic totals, interface counts, latency sparkline, historical `/api/node/metrics`) are per-machine, not mergeable. Render the summary block once per online node, each routed to its own node.
 
 **Files:**

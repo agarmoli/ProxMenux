@@ -142,12 +142,20 @@ y devuelve `{nodes:[{node,is_self,online,data:NetworkData}]}`.
 - **Filtro local** `nodeFilter` (chips Todos · nodoA · nodoB) derivado de los `_node`
   distintos; filtrado en cliente; por defecto *Todos*. Calcado de VMs.
 
-**Resumen por-nodo (no per-interfaz):** los datos node-global (traffic totals, active
-counts, hostname/dns, latencia al gateway, `/api/node/metrics`) **no** se mezclan: se
-muestran como **una tira/tarjeta de resumen por nodo**. Cada tarjeta enruta sus
-lecturas al suyo con `fetchAtNode(node, is_self, …)`:
+**Resumen sigue al filtro (decisión de implementación):** los datos node-global
+(traffic totals, active counts, hostname/dns, latencia al gateway) **no** se mezclan.
+En vez de N tarjetas (una por nodo) se usa **un único resumen que refleja el nodo
+seleccionado** por el filtro — o el nodo central/primero en "Todos" — etiquetado con
+el nodo cuando hay >1. Sus lecturas se enrutan a ese nodo con `fetchAtNode`:
 - `/api/network/latency/history` · `/api/network/latency/current` (sparkline + modal)
-- `/api/node/metrics?timeframe=` (histórico)
+
+> **Por qué single-summary y no per-node cards:** el bloque de resumen está muy
+> entrelazado (≈10 valores derivados + un hook `useSWR` de latencia top-level).
+> Renderizarlo por nodo dentro de un `map` llamaría hooks en bucle (viola las Rules of
+> Hooks de React) y exigiría extraer un componente hijo pesado. "Resumen-sigue-al-
+> filtro" usa **un solo hook con target dinámico** (legal), aprovecha el filtro ya
+> existente, y deja la latencia/métricas correctamente enrutadas. El resumen multi-nodo
+> en paralelo queda como mejora futura (YAGNI para el piloto).
 
 **Drill-down por interfaz:** al abrir una interfaz, su gráfico/metrics se enruta al
 nodo de esa interfaz con `fetchAtNode(iface._node, iface._node_is_self, …)`:
