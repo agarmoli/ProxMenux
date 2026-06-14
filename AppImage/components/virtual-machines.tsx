@@ -720,7 +720,7 @@ export function VirtualMachines() {
               const controller = new AbortController()
               const timeoutId = setTimeout(() => controller.abort(), 10000)
 
-              const details = await fetchApi(`/api/vms/${lxc.vmid}`)
+              const details = await fetchAtNode<any>(lxc._node, lxc._node_is_self, `/api/vms/${lxc.vmid}`)
 
               clearTimeout(timeoutId)
 
@@ -810,7 +810,7 @@ export function VirtualMachines() {
     }
 
     try {
-      const details = await fetchApi(`/api/vms/${vm.vmid}`)
+      const details = await fetchAtNode<any>(vm._node, vm._node_is_self, `/api/vms/${vm.vmid}`)
       setVMDetails(details)
     } catch (error) {
       console.error("Error fetching VM details:", error)
@@ -822,12 +822,12 @@ export function VirtualMachines() {
   const fetchMountPoints = async (vmid: number) => {
     setLoadingMounts(true)
     try {
-      const response = await fetchApi<{
+      const response = await fetchAtNode<{
         ok: boolean
         running: boolean
         mount_points: LxcMountPoint[]
         ad_hoc: LxcMountPoint[]
-      }>(`/api/lxc/${vmid}/mount-points`)
+      }>(selectedVM?._node, selectedVM?._node_is_self, `/api/lxc/${vmid}/mount-points`)
       if (response?.ok) {
         setMountPoints(response.mount_points || [])
         setAdHocMounts(response.ad_hoc || [])
@@ -870,7 +870,7 @@ export function VirtualMachines() {
   const fetchVmBackups = async (vmid: number) => {
     setLoadingBackups(true)
     try {
-      const response = await fetchApi(`/api/vms/${vmid}/backups`)
+      const response = await fetchAtNode<any>(selectedVM?._node, selectedVM?._node_is_self, `/api/vms/${vmid}/backups`)
       if (response.backups) {
         setVmBackups(response.backups)
       }
@@ -890,11 +890,11 @@ export function VirtualMachines() {
     setLoadingFirewallLog(true)
     setFirewallLogError(null)
     try {
-      const response = await fetchApi<{
+      const response = await fetchAtNode<{
         logs?: FirewallLogEntry[]
         firewall_enabled?: boolean
         error?: string
-      }>(`/api/vms/${vmid}/firewall/log?limit=500`)
+      }>(selectedVM?._node, selectedVM?._node_is_self, `/api/vms/${vmid}/firewall/log?limit=500`)
       setFirewallEnabled(response.firewall_enabled !== false)
       setFirewallLogs(Array.isArray(response.logs) ? response.logs : [])
       if (response.error && response.firewall_enabled !== false) {
@@ -930,7 +930,7 @@ export function VirtualMachines() {
     setShowBackupModal(false)
     
     try {
-      await fetchApi(`/api/vms/${selectedVM.vmid}/backup`, {
+      await fetchAtNode(selectedVM._node, selectedVM._node_is_self, `/api/vms/${selectedVM.vmid}/backup`, {
         method: "POST",
         body: JSON.stringify({
           storage: selectedBackupStorage,
@@ -958,7 +958,7 @@ export function VirtualMachines() {
   const handleVMControl = async (vmid: number, action: string) => {
     setControlLoading(true)
     try {
-      await fetchApi(`/api/vms/${vmid}/control`, {
+      await fetchAtNode(selectedVM?._node, selectedVM?._node_is_self, `/api/vms/${vmid}/control`, {
         method: "POST",
         body: JSON.stringify({ action }),
       })
@@ -986,7 +986,7 @@ export function VirtualMachines() {
   
 const handleDownloadLogs = async (vmid: number, vmName: string) => {
     try {
-      const data = await fetchApi(`/api/vms/${vmid}/logs`)
+      const data = await fetchAtNode<any>(selectedVM?._node, selectedVM?._node_is_self, `/api/vms/${vmid}/logs`)
 
       // Format logs as plain text
       let logText = `=== Logs for ${vmName} (VMID: ${vmid}) ===\n`
@@ -1225,7 +1225,7 @@ const handleDownloadLogs = async (vmid: number, vmName: string) => {
 
     setSavingNotes(true)
     try {
-      await fetchApi(`/api/vms/${selectedVM.vmid}/description`, {
+      await fetchAtNode(selectedVM._node, selectedVM._node_is_self, `/api/vms/${selectedVM.vmid}/description`, {
         method: "PUT",
         body: JSON.stringify({
           description: editedNotes, // Send as-is, pvesh will handle encoding
