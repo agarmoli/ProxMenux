@@ -3079,13 +3079,19 @@ const handleDownloadLogs = async (vmid: number, vmName: string) => {
                 {/* Terminal button for LXC containers - only when running */}
                 {selectedVM?.type === "lxc" && selectedVM?.status === "running" && (
                   <div className="mb-3">
-                    <Button
-                      className="w-full bg-zinc-600/20 border border-zinc-600/50 text-zinc-300 hover:bg-zinc-600/30"
-                      onClick={() => selectedVM && openLxcTerminal(selectedVM.vmid, selectedVM.name)}
-                    >
-                      <Terminal className="h-4 w-4 mr-2" />
-                      Open Terminal
-                    </Button>
+                    {selectedVM?._node_is_self === false ? (
+                      <div className="text-xs text-muted-foreground border border-border rounded-md p-2">
+                        Console is only available on the node itself — switch to {selectedVM._node} to open it.
+                      </div>
+                    ) : (
+                      <Button
+                        className="w-full bg-zinc-600/20 border border-zinc-600/50 text-zinc-300 hover:bg-zinc-600/30"
+                        onClick={() => selectedVM && openLxcTerminal(selectedVM.vmid, selectedVM.name)}
+                      >
+                        <Terminal className="h-4 w-4 mr-2" />
+                        Open Terminal
+                      </Button>
+                    )}
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-3">
