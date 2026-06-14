@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Thermometer, TrendingDown, TrendingUp, Minus } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { useIsMobile } from "../hooks/use-mobile"
-import { fetchApi } from "@/lib/api-config"
+import { fetchAtNode } from "@/lib/api-config"
 import { useDiskTempThresholds, type DiskTempThreshold } from "@/lib/health-thresholds"
 
 const TIMEFRAME_OPTIONS = [
@@ -37,6 +37,8 @@ interface DiskTemperatureDetailModalProps {
   diskModel?: string
   liveTemperature?: number
   diskType?: "HDD" | "SSD" | "NVMe" | "SAS" | string
+  node?: string
+  isSelf?: boolean
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -82,6 +84,8 @@ export function DiskTemperatureDetailModal({
   diskModel,
   liveTemperature,
   diskType,
+  node,
+  isSelf,
 }: DiskTemperatureDetailModalProps) {
   const [timeframe, setTimeframe] = useState("day")
   const [data, setData] = useState<TempHistoryPoint[]>([])
@@ -98,7 +102,9 @@ export function DiskTemperatureDetailModal({
   const fetchHistory = async () => {
     setLoading(true)
     try {
-      const result = await fetchApi<{ data: TempHistoryPoint[]; stats: TempStats }>(
+      const result = await fetchAtNode<{ data: TempHistoryPoint[]; stats: TempStats }>(
+        node,
+        isSelf,
         `/api/disk/${encodeURIComponent(diskName)}/temperature/history?timeframe=${timeframe}`,
       )
       if (result && result.data) {

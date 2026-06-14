@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { Thermometer } from "lucide-react"
 import { Badge } from "./ui/badge"
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts"
-import { fetchApi } from "@/lib/api-config"
+import { fetchAtNode } from "@/lib/api-config"
 import { useDiskTempThresholds } from "@/lib/health-thresholds"
 
 interface TempPoint {
@@ -19,6 +19,8 @@ interface DiskTemperatureCardProps {
   diskType: string
   /** Click handler — opens the full timeframe-selector modal as drill-down. */
   onOpenDetail?: () => void
+  node?: string
+  isSelf?: boolean
 }
 
 // Disk-temperature thresholds come from the user-configurable backend
@@ -54,6 +56,8 @@ export function DiskTemperatureCard({
   liveTemperature,
   diskType,
   onOpenDetail,
+  node,
+  isSelf,
 }: DiskTemperatureCardProps) {
   const [data, setData] = useState<TempPoint[]>([])
   const [loading, setLoading] = useState(true)
@@ -64,7 +68,9 @@ export function DiskTemperatureCard({
     const fetchHistory = async () => {
       setLoading(true)
       try {
-        const result = await fetchApi<{ data: TempPoint[] }>(
+        const result = await fetchAtNode<{ data: TempPoint[] }>(
+          node,
+          isSelf,
           `/api/disk/${encodeURIComponent(diskName)}/temperature/history?timeframe=hour`,
         )
         if (cancelled.current) return
