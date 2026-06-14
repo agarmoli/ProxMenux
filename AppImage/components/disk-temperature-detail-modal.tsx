@@ -97,7 +97,7 @@ export function DiskTemperatureDetailModal({
     if (open && diskName) {
       fetchHistory()
     }
-  }, [open, timeframe, diskName])
+  }, [open, timeframe, diskName, node, isSelf])
 
   const fetchHistory = async () => {
     setLoading(true)

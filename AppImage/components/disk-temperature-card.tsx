@@ -89,7 +89,7 @@ export function DiskTemperatureCard({
       cancelled.current = true
       clearInterval(id)
     }
-  }, [diskName])
+  }, [diskName, node, isSelf])
 
   const allThresholds = useDiskTempThresholds()
   const dt = (() => {
