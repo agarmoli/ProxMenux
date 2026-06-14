@@ -8,7 +8,7 @@ import { Badge } from "./ui/badge"
 import { Activity, TrendingDown, TrendingUp, Minus, RefreshCw, Wifi, FileText, Square } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts"
 import { useIsMobile } from "../hooks/use-mobile"
-import { fetchApi } from "@/lib/api-config"
+import { fetchAtNode } from "@/lib/api-config"
 
 const TIMEFRAME_OPTIONS = [
   { value: "hour", label: "1 Hour" },
@@ -58,6 +58,8 @@ interface LatencyDetailModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   currentLatency?: number
+  node?: string
+  isSelf?: boolean
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -705,7 +707,7 @@ ${!report.isRealtime && report.data.length > 0 ? `
   window.open(url, "_blank")
 }
 
-export function LatencyDetailModal({ open, onOpenChange, currentLatency }: LatencyDetailModalProps) {
+export function LatencyDetailModal({ open, onOpenChange, currentLatency, node, isSelf }: LatencyDetailModalProps) {
   const [timeframe, setTimeframe] = useState("hour")
   const [target, setTarget] = useState("gateway")
   const [data, setData] = useState<LatencyHistoryPoint[]>([])
@@ -751,8 +753,8 @@ export function LatencyDetailModal({ open, onOpenChange, currentLatency }: Laten
   const fetchHistory = async () => {
     setLoading(true)
     try {
-      const result = await fetchApi<{ data: LatencyHistoryPoint[]; stats: LatencyStats; target: string }>(
-        `/api/network/latency/history?target=${target}&timeframe=${timeframe}`
+      const result = await fetchAtNode<{ data: LatencyHistoryPoint[]; stats: LatencyStats; target: string }>(
+        node, isSelf, `/api/network/latency/history?target=${target}&timeframe=${timeframe}`
       )
       if (result && result.data) {
         setData(result.data)
@@ -767,7 +769,7 @@ export function LatencyDetailModal({ open, onOpenChange, currentLatency }: Laten
 
   const runSingleTest = useCallback(async () => {
     try {
-      const result = await fetchApi<RealtimeResult>(`/api/network/latency/current?target=${target}`)
+      const result = await fetchAtNode<RealtimeResult>(node, isSelf, `/api/network/latency/current?target=${target}`)
       if (result) {
         const baseTime = Date.now()
         // Expand each ping result into 3 individual samples (min, avg, max) with slightly different timestamps

@@ -8,7 +8,7 @@ import { Wifi, Activity, Network, Router, AlertCircle, Zap, Timer, Server } from
 import useSWR from "swr"
 import { NetworkTrafficChart } from "./network-traffic-chart"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
-import { fetchApi, aggregateUrl, type AggregateResponse, type AggregateNode } from "../lib/api-config"
+import { fetchApi, fetchAtNode, aggregateUrl, type AggregateResponse, type AggregateNode } from "../lib/api-config"
 import { formatNetworkTraffic, getNetworkUnit } from "../lib/format-network"
 import { LatencyDetailModal } from "./latency-detail-modal"
 import { AreaChart, Area, LineChart, Line, ResponsiveContainer, YAxis } from "recharts"
@@ -162,15 +162,25 @@ export function NetworkMetrics() {
   const [latencyModalOpen, setLatencyModalOpen] = useState(false)
 
   const [networkUnit, setNetworkUnit] = useState<"Bytes" | "Bits">(() => getNetworkUnit())
-  
-  // Latency history for sparkline (last hour)
+
+  // Derive node info ABOVE all secondary hooks (plain consts, not hooks — allowed before any return)
+  const aggNodes = agg?.nodes ?? []
+  const onlineNodes = aggNodes.filter((n) => n.online && n.data)
+  const offlineNodes = aggNodes.filter((n) => !n.online)
+  const nodeNames = onlineNodes.map((n) => n.node)
+  // The summary (overview cards, overall traffic chart, latency) reflects ONE
+  // node: the filtered node, or the central/first node when "All" is selected.
+  const summaryNode = nodeFilter ? onlineNodes.find((n) => n.node === nodeFilter) : onlineNodes[0]
+
+  // Latency history for sparkline (last hour) — routed to summaryNode
   const { data: latencyData } = useSWR<{
     data: Array<{ timestamp: number; value: number }>
     stats: { min: number; max: number; avg: number; current: number }
     target: string
-  }>("/api/network/latency/history?target=gateway&timeframe=hour", 
-    (url: string) => fetchApi(url), 
-    { refreshInterval: 60000, revalidateOnFocus: false }
+  }>(
+    summaryNode ? `latency-history@${summaryNode.node}` : null,
+    () => fetchAtNode(summaryNode!.node, summaryNode!.is_self, "/api/network/latency/history?target=gateway&timeframe=hour"),
+    { refreshInterval: 60000, revalidateOnFocus: false },
   )
 
   useEffect(() => {
@@ -184,11 +194,11 @@ export function NetworkMetrics() {
     return () => window.removeEventListener("networkUnitChanged" as any, handleUnitChange)
   }, [])
 
-  const { data: modalNetworkData } = useSWR<NetworkData>(selectedInterface ? "/api/network" : null, fetcher, {
-    refreshInterval: 17000,
-    revalidateOnFocus: false,
-    revalidateOnReconnect: true,
-  })
+  const { data: modalNetworkData } = useSWR<NetworkData>(
+    selectedInterface ? `modal-network@${selectedInterface._node ?? "self"}` : null,
+    () => fetchAtNode<NetworkData>(selectedInterface!._node, selectedInterface!._node_is_self, "/api/network"),
+    { refreshInterval: 17000, revalidateOnFocus: false, revalidateOnReconnect: true },
+  )
 
   const { data: interfaceHistoricalData } = useSWR<any>(`/api/node/metrics?timeframe=${timeframe}`, fetcher, {
     refreshInterval: 29000,
@@ -229,11 +239,6 @@ export function NetworkMetrics() {
     )
   }
 
-  const aggNodes = agg?.nodes ?? []
-  const onlineNodes = aggNodes.filter((n) => n.online && n.data)
-  const offlineNodes = aggNodes.filter((n) => !n.online)
-  const nodeNames = onlineNodes.map((n) => n.node)
-
   const tag = (
     list: NetworkInterface[] | undefined,
     n: AggregateNode<NetworkData>,
@@ -247,7 +252,7 @@ export function NetworkMetrics() {
   const mergedBridge = applyNodeFilter(onlineNodes.flatMap((n) => tag(n.data!.bridge_interfaces, n)))
   const mergedVmLxc = applyNodeFilter(onlineNodes.flatMap((n) => tag(n.data!.vm_lxc_interfaces, n)))
 
-  const networkData = onlineNodes[0]?.data
+  const networkData = summaryNode?.data
   if (!networkData) {
     return (
       <div className="text-sm text-muted-foreground p-6">No network data available.</div>
@@ -370,6 +375,14 @@ export function NetworkMetrics() {
           {n.node} — offline{n.error ? ` (${n.error})` : ""}
         </div>
       ))}
+      {/* Summary node label in multi-node mode */}
+      {nodeNames.length > 1 && summaryNode && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Server className="h-3 w-3" />
+          Summary for <span className="font-medium text-foreground">{summaryNode.node}</span>
+          {summaryNode.is_self ? " (this node)" : ""} — pick a node above to switch
+        </div>
+      )}
       {/* Network Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 xl:gap-6">
         {/* ── Network Traffic (preview restyle: Down/Up dual headline + stacked bar) ── */}
@@ -570,7 +583,7 @@ export function NetworkMetrics() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <NetworkTrafficChart timeframe={timeframe} onTotalsCalculated={setNetworkTotals} networkUnit={networkUnit} />
+          <NetworkTrafficChart timeframe={timeframe} onTotalsCalculated={setNetworkTotals} networkUnit={networkUnit} node={summaryNode?.node} isSelf={summaryNode?.is_self} />
         </CardContent>
       </Card>
 
@@ -1105,6 +1118,8 @@ export function NetworkMetrics() {
                               onTotalsCalculated={setInterfaceTotals}
                               refreshInterval={60000}
                               networkUnit={networkUnit}
+                              node={displayInterface._node}
+                              isSelf={displayInterface._node_is_self}
                             />
                           </div>
 
@@ -1279,6 +1294,8 @@ export function NetworkMetrics() {
       <LatencyDetailModal
         open={latencyModalOpen}
         onOpenChange={setLatencyModalOpen}
+        node={summaryNode?.node}
+        isSelf={summaryNode?.is_self}
       />
     </div>
   )

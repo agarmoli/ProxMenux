@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts"
 import { Loader2 } from 'lucide-react'
-import { fetchApi } from "../lib/api-config"
+import { fetchAtNode } from "../lib/api-config"
 import { getNetworkUnit } from "../lib/format-network"
 
 interface NetworkMetricsData {
@@ -19,6 +19,8 @@ interface NetworkTrafficChartProps {
   onTotalsCalculated?: (totals: { received: number; sent: number }) => void
   refreshInterval?: number // En milisegundos, por defecto 60000 (60 segundos)
   networkUnit?: "Bytes" | "Bits" // Added networkUnit prop
+  node?: string
+  isSelf?: boolean
 }
 
 const CustomNetworkTooltip = ({ active, payload, label, networkUnit }: any) => {
@@ -49,6 +51,8 @@ export function NetworkTrafficChart({
   onTotalsCalculated,
   refreshInterval = 60000,
   networkUnit: networkUnitProp, // Rename prop to avoid conflict
+  node,
+  isSelf,
 }: NetworkTrafficChartProps) {
   const [data, setData] = useState<NetworkMetricsData[]>([])
   const [loading, setLoading] = useState(true)
@@ -111,7 +115,7 @@ export function NetworkTrafficChart({
         : `/api/node/metrics?timeframe=${timeframe}`
 
 
-      const result = await fetchApi<any>(apiPath)
+      const result = await fetchAtNode<any>(node, isSelf, apiPath)
 
       if (!result.data || !Array.isArray(result.data)) {
         throw new Error("Invalid data format received from server")
