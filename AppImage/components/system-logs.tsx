@@ -28,7 +28,7 @@ import {
   Terminal,
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
-import { API_PORT, fetchApi, getApiUrl, getAuthToken } from "@/lib/api-config"
+import { API_PORT, fetchApi, fetchAtNode, aggregateUrl, getApiUrl, getAuthToken, type AggregateResponse, type AggregateNode } from "@/lib/api-config"
 
 interface Backup {
   volid: string
@@ -39,6 +39,8 @@ interface Backup {
   size_human: string
   created: string
   timestamp: number
+  _node?: string
+  _node_is_self?: boolean
 }
 
 interface Event {
@@ -52,6 +54,8 @@ interface Event {
   starttime: string
   endtime: string
   duration: string
+  _node?: string
+  _node_is_self?: boolean
 }
 
 interface Notification {
@@ -60,6 +64,8 @@ interface Notification {
   service: string
   message: string
   source: string
+  _node?: string
+  _node_is_self?: boolean
 }
 
 interface SystemLog {
@@ -71,6 +77,8 @@ interface SystemLog {
   source: string
   pid?: string
   hostname?: string
+  _node?: string
+  _node_is_self?: boolean
 }
 
 interface CombinedLogEntry {
@@ -85,6 +93,8 @@ interface CombinedLogEntry {
   isEvent: boolean
   eventData?: Event
   sortTimestamp: number
+  _node?: string
+  _node_is_self?: boolean
 }
 
 export function SystemLogs() {
@@ -117,6 +127,9 @@ export function SystemLogs() {
   const [customDays, setCustomDays] = useState("1")
   const [refreshCounter, setRefreshCounter] = useState(0)
 
+  const [nodesMeta, setNodesMeta] = useState<AggregateNode<unknown>[]>([])
+  const [nodeFilter, setNodeFilter] = useState<string | null>(null)
+
   // Real on-host counts for the selected date range. /api/logs caps
   // the entries it returns at 10 000 for performance, but the Total
   // / Errors / Warnings cards must show the actual counts in the
@@ -136,18 +149,36 @@ export function SystemLogs() {
         const daysAgo = dateFilter === "custom" ? Number.parseInt(customDays) : Number.parseInt(dateFilter)
         const clampedDays = Math.max(1, Math.min(daysAgo || 1, 90))
         const [logsRes, backupsRes, eventsRes, notificationsRes, countsRes] = await Promise.all([
-          fetchSystemLogs(dateFilter, customDays),
-          fetchApi<{ backups?: Backup[] }>("/api/backups"),
-          fetchApi<{ events?: Event[] }>("/api/events?limit=50"),
-          fetchApi<{ notifications?: Notification[] }>("/api/notifications"),
-          fetchApi<{ total: number; errors: number; warnings: number; info: number }>(`/api/logs/counts?since_days=${clampedDays}`),
+          fetchApi<AggregateResponse<{ logs?: SystemLog[] } | SystemLog[]>>(aggregateUrl("/api/logs") + `&since_days=${clampedDays}`),
+          fetchApi<AggregateResponse<{ backups?: Backup[] }>>(aggregateUrl("/api/backups")),
+          fetchApi<AggregateResponse<{ events?: Event[] }>>(aggregateUrl("/api/events") + `&limit=50`),
+          fetchApi<AggregateResponse<{ notifications?: Notification[] }>>(aggregateUrl("/api/notifications")),
+          fetchApi<AggregateResponse<{ total: number; errors: number; warnings: number; info: number }>>(aggregateUrl("/api/logs/counts") + `&since_days=${clampedDays}`),
         ])
         if (cancelled) return
-        setLogs(logsRes)
-        setBackups(backupsRes.backups || [])
-        setEvents(eventsRes.events || [])
-        setNotifications(notificationsRes.notifications || [])
-        setLogsCounts(countsRes)
+        const tag = <T,>(rows: T[] | undefined, n: AggregateNode<unknown>): T[] =>
+          (rows ?? []).map((r) => ({ ...r, _node: n.node, _node_is_self: n.is_self }))
+        const onlineOf = <T,>(res: AggregateResponse<T>) => res.nodes.filter((n) => n.online)
+
+        setNodesMeta(logsRes.nodes)
+        setLogs(onlineOf(logsRes).flatMap((n) => {
+          const d = n.data as { logs?: SystemLog[] } | SystemLog[] | null
+          const arr = Array.isArray(d) ? d : (d?.logs ?? [])
+          return tag(arr, n)
+        }))
+        setBackups(onlineOf(backupsRes).flatMap((n) => tag(n.data?.backups, n)))
+        setEvents(onlineOf(eventsRes).flatMap((n) => tag(n.data?.events, n)))
+        setNotifications(onlineOf(notificationsRes).flatMap((n) => tag(n.data?.notifications, n)))
+        setLogsCounts(
+          countsRes.nodes.reduce(
+            (acc, n) => {
+              const c = n.data
+              if (c) { acc.total += c.total || 0; acc.errors += c.errors || 0; acc.warnings += c.warnings || 0; acc.info += c.info || 0 }
+              return acc
+            },
+            { total: 0, errors: 0, warnings: 0, info: 0 },
+          ),
+        )
       } catch (err) {
         if (cancelled) return
         setError("Failed to connect to server")
@@ -166,20 +197,6 @@ export function SystemLogs() {
 
   const refreshData = () => {
     setRefreshCounter((prev) => prev + 1)
-  }
-
-  const fetchSystemLogs = async (filterDays: string, filterCustom: string): Promise<SystemLog[]> => {
-    try {
-      const daysAgo = filterDays === "custom" ? Number.parseInt(filterCustom) : Number.parseInt(filterDays)
-      const clampedDays = Math.max(1, Math.min(daysAgo || 1, 90))
-      const apiUrl = `/api/logs?since_days=${clampedDays}`
-
-      const data = await fetchApi<{ logs?: SystemLog[] } | SystemLog[]>(apiUrl)
-      return Array.isArray(data) ? data : data.logs || []
-    } catch {
-      setError("Failed to load logs. Please try again.")
-      return []
-    }
   }
 
   const handleDownloadLogs = async () => {
@@ -346,6 +363,8 @@ export function SystemLogs() {
           isEvent: true,
           eventData: event,
           sortTimestamp: new Date(event.starttime).getTime(),
+          _node: event._node,
+          _node_is_self: event._node_is_self,
         })),
       ].sort((a, b) => b.sortTimestamp - a.sortTimestamp),
     [logs, events],
@@ -364,11 +383,15 @@ export function SystemLogs() {
           safeToLowerCase(log.unit).includes(searchTermLower)
         const matchesLevel = levelFilter === "all" || log.level === levelFilter
         const matchesService = serviceFilter === "all" || log.service === serviceFilter
+        const matchesNode = !nodeFilter || log._node === nodeFilter
 
-        return matchesSearch && matchesLevel && matchesService
+        return matchesSearch && matchesLevel && matchesService && matchesNode
       }),
-    [combinedLogs, searchTerm, levelFilter, serviceFilter],
+    [combinedLogs, searchTerm, levelFilter, serviceFilter, nodeFilter],
   )
+
+  const onlineNodeNames = nodesMeta.filter((n) => n.online).map((n) => n.node)
+  const offlineNodes = nodesMeta.filter((n) => !n.online)
 
   const displayedLogs = filteredCombinedLogs.slice(0, displayedLogsCount)
   const hasMoreLogs = displayedLogsCount < filteredCombinedLogs.length
