@@ -941,7 +941,7 @@ export function StorageOverview() {
         })()}
       </div>
 
-      {proxmoxStorage && proxmoxStorage.storage && proxmoxStorage.storage.length > 0 && (
+      {allProxmox.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -951,17 +951,17 @@ export function StorageOverview() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {proxmoxStorage.storage
+              {allProxmox
                 .filter((storage) => storage && storage.name && storage.used >= 0 && storage.available >= 0)
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((storage) => {
                   // Check if storage is excluded from monitoring
                   const isExcluded = storage.excluded === true
                   const hasError = storage.status === "error" && !isExcluded
-                  
+
                   return (
                   <div
-                    key={storage.name}
+                    key={`${storage._node}:${storage.name}`}
                     className={`border rounded-lg p-4 ${
                       hasError 
                         ? "border-red-500/50 bg-red-500/5" 
@@ -975,6 +975,11 @@ export function StorageOverview() {
                       <div className="hidden md:flex items-center gap-3">
                         <Database className="h-5 w-5 text-muted-foreground" />
                         <h3 className="font-semibold text-lg">{storage.name}</h3>
+                        {storage._node && nodeNames.length > 1 && (
+                          <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                            <Server className="h-3 w-3 mr-1" />{storage._node}
+                          </Badge>
+                        )}
                         <Badge className={getStorageTypeBadge(storage.type)}>{storage.type}</Badge>
                         {/* Sprint 13: hint that this PVE storage also
                             shows up below in Remote Mounts where the
@@ -1004,6 +1009,11 @@ export function StorageOverview() {
                           </Badge>
                         )}
                         <h3 className="font-semibold text-base flex-1 min-w-0 truncate">{storage.name}</h3>
+                        {storage._node && nodeNames.length > 1 && (
+                          <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                            <Server className="h-3 w-3 mr-1" />{storage._node}
+                          </Badge>
+                        )}
                         {isExcluded ? (
                           <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20 text-[10px]">
                             excluded
@@ -1092,20 +1102,20 @@ export function StorageOverview() {
           standalone host with no shares doesn't see an empty card.
           Stale mounts get a red bg + critical icon; read-only get
           amber; healthy get a green dot. */}
-      {remoteMounts.length > 0 && (
+      {allMounts.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Database className="h-5 w-5" />
               Remote Mounts
               <Badge variant="outline" className="ml-2 text-[10px]">
-                {remoteMounts.length}
+                {allMounts.length}
               </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {remoteMounts
+              {allMounts
                 .slice()
                 .sort((a, b) => a.target.localeCompare(b.target))
                 .map((mount) => {
@@ -1118,7 +1128,7 @@ export function StorageOverview() {
                       : "border-white/10 sm:border-border bg-white/5 sm:bg-card sm:hover:bg-white/5"
                   return (
                     <div
-                      key={mount.target}
+                      key={`${mount._node}:${mount.target}`}
                       onClick={() => setMountDetail(mount)}
                       className={`cursor-pointer border rounded-lg p-3 transition-colors ${cardClasses}`}
                     >
@@ -1130,6 +1140,11 @@ export function StorageOverview() {
                             }`}
                           />
                           <h3 className="font-mono text-sm truncate">{mount.target}</h3>
+                          {mount._node && nodeNames.length > 1 && (
+                            <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                              <Server className="h-3 w-3 mr-1" />{mount._node}
+                            </Badge>
+                          )}
                           <Badge className={getStorageTypeBadge(mount.fstype)}>{mount.fstype}</Badge>
                           {/* Sprint 13.18: makes it explicit that the
                               row corresponds to an entry already in the
@@ -1338,7 +1353,7 @@ export function StorageOverview() {
       </Dialog>
 
       {/* ZFS Pools */}
-      {storageData.zfs_pools && storageData.zfs_pools.length > 0 && (
+      {allZfs.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -1348,11 +1363,16 @@ export function StorageOverview() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {storageData.zfs_pools.map((pool) => (
-                <div key={pool.name} className="border rounded-lg p-4">
+              {allZfs.map((pool) => (
+                <div key={`${pool._node}:${pool.name}`} className="border rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
                       <h3 className="font-semibold text-lg">{pool.name}</h3>
+                      {pool._node && nodeNames.length > 1 && (
+                        <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                          <Server className="h-3 w-3 mr-1" />{pool._node}
+                        </Badge>
+                      )}
                       {getHealthBadge(pool.health)}
                     </div>
                     {getHealthIcon(pool.health)}
@@ -1388,8 +1408,8 @@ export function StorageOverview() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {storageData.disks.filter(d => d.connection_type !== 'usb').map((disk) => (
-              <div key={disk.name}>
+            {allDisks.filter(d => d.connection_type !== 'usb').map((disk) => (
+              <div key={`${disk._node}:${disk.name}`}>
                 <div
                   className="sm:hidden border border-white/10 rounded-lg p-4 cursor-pointer bg-white/5 transition-colors"
                   onClick={() => handleDiskClick(disk)}
@@ -1399,6 +1419,11 @@ export function StorageOverview() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <HardDrive className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                       <h3 className="font-semibold">/dev/{disk.name}</h3>
+                      {disk._node && nodeNames.length > 1 && (
+                        <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                          <Server className="h-3 w-3 mr-1" />{disk._node}
+                        </Badge>
+                      )}
                       <Badge className={getDiskTypeBadge(disk.name, disk.rotation_rate).className}>
                         {getDiskTypeBadge(disk.name, disk.rotation_rate).label}
                       </Badge>
@@ -1491,6 +1516,11 @@ export function StorageOverview() {
                     <div className="flex items-center gap-2">
                       <HardDrive className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                       <h3 className="font-semibold">/dev/{disk.name}</h3>
+                      {disk._node && nodeNames.length > 1 && (
+                        <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                          <Server className="h-3 w-3 mr-1" />{disk._node}
+                        </Badge>
+                      )}
                       <Badge className={getDiskTypeBadge(disk.name, disk.rotation_rate).className}>
                         {getDiskTypeBadge(disk.name, disk.rotation_rate).label}
                       </Badge>
@@ -1592,7 +1622,7 @@ export function StorageOverview() {
       </Card>
 
       {/* External Storage (USB) */}
-      {storageData.disks.filter(d => d.connection_type === 'usb').length > 0 && (
+      {allDisks.filter(d => d.connection_type === 'usb').length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -1602,8 +1632,8 @@ export function StorageOverview() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {storageData.disks.filter(d => d.connection_type === 'usb').map((disk) => (
-                <div key={disk.name}>
+              {allDisks.filter(d => d.connection_type === 'usb').map((disk) => (
+                <div key={`${disk._node}:${disk.name}`}>
                   {/* Mobile card */}
                   <div
                     className="sm:hidden border border-white/10 rounded-lg p-4 cursor-pointer bg-white/5 transition-colors"
@@ -1613,6 +1643,11 @@ export function StorageOverview() {
                       <div className="flex items-center gap-2">
                         <Usb className="h-5 w-5 text-orange-400 flex-shrink-0" />
                         <h3 className="font-semibold">/dev/{disk.name}</h3>
+                        {disk._node && nodeNames.length > 1 && (
+                          <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                            <Server className="h-3 w-3 mr-1" />{disk._node}
+                          </Badge>
+                        )}
                         <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[10px] px-1.5">USB</Badge>
                       </div>
                       <div className="flex items-center justify-between gap-3 pl-7">
@@ -1671,6 +1706,11 @@ export function StorageOverview() {
                       <div className="flex items-center gap-2">
                         <Usb className="h-5 w-5 text-orange-400" />
                         <h3 className="font-semibold">/dev/{disk.name}</h3>
+                        {disk._node && nodeNames.length > 1 && (
+                          <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                            <Server className="h-3 w-3 mr-1" />{disk._node}
+                          </Badge>
+                        )}
                         <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[10px] px-1.5">USB</Badge>
                       </div>
                       <div className="flex items-center gap-3">
