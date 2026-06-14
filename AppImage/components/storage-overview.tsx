@@ -371,7 +371,7 @@ export function StorageOverview() {
         const params = new URLSearchParams()
         if (disk.name) params.set('device', disk.name)
         if (disk.serial && disk.serial !== 'Unknown') params.set('serial', disk.serial)
-        const data = await fetchApi<{ observations: DiskObservation[] }>(`/api/storage/observations?${params.toString()}`)
+        const data = await fetchAtNode<{ observations: DiskObservation[] }>(disk._node, disk._node_is_self, `/api/storage/observations?${params.toString()}`)
         setDiskObservations(data.observations || [])
       } catch {
         setDiskObservations([])
@@ -383,12 +383,12 @@ export function StorageOverview() {
     // Fetch SMART JSON data from real test if available
     const fetchSmartJson = async () => {
       try {
-        const data = await fetchApi<{
+        const data = await fetchAtNode<{
           has_data: boolean
           data?: Record<string, unknown>
           timestamp?: string
           test_type?: string
-        }>(`/api/storage/smart/${disk.name}/latest`)
+        }>(disk._node, disk._node_is_self, `/api/storage/smart/${disk.name}/latest`)
         setSmartJsonData(data)
       } catch {
         setSmartJsonData({ has_data: false })
@@ -2136,6 +2136,8 @@ export function StorageOverview() {
                       liveTemperature={selectedDisk.temperature}
                       diskType={getDiskTypeBadge(selectedDisk.name, selectedDisk.rotation_rate).label}
                       onOpenDetail={selectedDisk.temperature > 0 ? () => setTempHistoryDisk(selectedDisk) : undefined}
+                      node={selectedDisk?._node}
+                      isSelf={selectedDisk?._node_is_self}
                     />
                   </div>
                 )}
@@ -2468,6 +2470,8 @@ export function StorageOverview() {
           diskModel={tempHistoryDisk.model}
           liveTemperature={tempHistoryDisk.temperature}
           diskType={getDiskTypeBadge(tempHistoryDisk.name, tempHistoryDisk.rotation_rate).label}
+          node={tempHistoryDisk?._node}
+          isSelf={tempHistoryDisk?._node_is_self}
         />
       )}
     </div>
@@ -2482,10 +2486,12 @@ interface DiskTempHistoryPayload { data: DiskTempHistoryPoint[]; stats: { min: n
 // `month` bucket (2h granularity) returns <2 points on freshly-deployed
 // hosts where data only spans ~1 hour. Cascade through coarser → finer
 // timeframes and use the first one that yields a renderable chart.
-async function fetchTempHistoryForReport(diskName: string): Promise<DiskTempHistoryPayload | undefined> {
+async function fetchTempHistoryForReport(diskName: string, node?: string, isSelf?: boolean): Promise<DiskTempHistoryPayload | undefined> {
   for (const tf of ['month', 'week', 'day', 'hour']) {
     try {
-      const result = await fetchApi<DiskTempHistoryPayload>(
+      const result = await fetchAtNode<DiskTempHistoryPayload>(
+        node,
+        isSelf,
         `/api/disk/${encodeURIComponent(diskName)}/temperature/history?timeframe=${tf}`,
       )
       if (result?.data && result.data.length >= 2) return result
@@ -3976,7 +3982,7 @@ function SmartTestTab({ disk, observations = [], lastTestDate }: SmartTestTabPro
   const fetchSmartStatus = async () => {
   try {
   setLoading(true)
-  const data = await fetchApi<SmartTestStatus>(`/api/storage/smart/${disk.name}`)
+  const data = await fetchAtNode<SmartTestStatus>(disk._node, disk._node_is_self, `/api/storage/smart/${disk.name}`)
   setTestStatus(data)
   return data
   } catch {
@@ -3997,7 +4003,7 @@ function SmartTestTab({ disk, observations = [], lastTestDate }: SmartTestTabPro
   if (data.status === 'running') {
   pollInterval = setInterval(async () => {
   try {
-    const status = await fetchApi<SmartTestStatus>(`/api/storage/smart/${disk.name}`)
+    const status = await fetchAtNode<SmartTestStatus>(disk._node, disk._node_is_self, `/api/storage/smart/${disk.name}`)
     setTestStatus(status)
     if (status.status !== 'running' && pollInterval) {
       clearInterval(pollInterval)
@@ -4033,7 +4039,7 @@ function SmartTestTab({ disk, observations = [], lastTestDate }: SmartTestTabPro
     try {
       setInstalling(true)
       setTestError(null)
-      const data = await fetchApi<{ success: boolean; error?: string }>('/api/storage/smart/tools/install', {
+      const data = await fetchAtNode<{ success: boolean; error?: string }>(disk._node, disk._node_is_self, '/api/storage/smart/tools/install', {
         method: 'POST',
         body: JSON.stringify({ install_all: true })
       })
@@ -4055,7 +4061,7 @@ function SmartTestTab({ disk, observations = [], lastTestDate }: SmartTestTabPro
       setRunningTest(testType)
       setTestError(null)
       
-      await fetchApi(`/api/storage/smart/${disk.name}/test`, {
+      await fetchAtNode(disk._node, disk._node_is_self, `/api/storage/smart/${disk.name}/test`, {
         method: 'POST',
         body: JSON.stringify({ test_type: testType })
       })
@@ -4071,7 +4077,7 @@ function SmartTestTab({ disk, observations = [], lastTestDate }: SmartTestTabPro
       const pollInterval = setInterval(async () => {
         pollCount++
         try {
-          const statusData = await fetchApi<SmartTestStatus>(`/api/storage/smart/${disk.name}`)
+          const statusData = await fetchAtNode<SmartTestStatus>(disk._node, disk._node_is_self, `/api/storage/smart/${disk.name}`)
           setTestStatus(statusData)
           
           // Only clear runningTest when we get a definitive "not running" status
@@ -4322,7 +4328,7 @@ function SmartTestTab({ disk, observations = [], lastTestDate }: SmartTestTabPro
             // history fetch so openSmartReport's sync read picks up
             // the user's customised values instead of stale defaults.
             const [tempHistory] = await Promise.all([
-              fetchTempHistoryForReport(disk.name),
+              fetchTempHistoryForReport(disk.name, disk._node, disk._node_is_self),
               loadDiskTempThresholds(),
             ])
             openSmartReport(disk, testStatus, smartAttributes, observations, lastTestDate, reportWindow || undefined, false, tempHistory)
@@ -4360,7 +4366,7 @@ function HistoryTab({ disk }: { disk: DiskInfo }) {
   const fetchHistory = async () => {
     try {
       setLoading(true)
-      const data = await fetchApi<{ history: SmartHistoryEntry[] }>(`/api/storage/smart/${disk.name}/history?limit=50`)
+      const data = await fetchAtNode<{ history: SmartHistoryEntry[] }>(disk._node, disk._node_is_self, `/api/storage/smart/${disk.name}/history?limit=50`)
       setHistory(data.history || [])
     } catch {
       setHistory([])
@@ -4374,7 +4380,7 @@ function HistoryTab({ disk }: { disk: DiskInfo }) {
   const handleDelete = async (filename: string) => {
     try {
       setDeleting(filename)
-      await fetchApi(`/api/storage/smart/${disk.name}/history/${filename}`, { method: 'DELETE' })
+      await fetchAtNode(disk._node, disk._node_is_self, `/api/storage/smart/${disk.name}/history/${filename}`, { method: 'DELETE' })
       setHistory(prev => prev.filter(h => h.filename !== filename))
     } catch {
       // Silently fail
@@ -4385,7 +4391,7 @@ function HistoryTab({ disk }: { disk: DiskInfo }) {
 
   const handleDownload = async (filename: string) => {
     try {
-      const response = await fetchApi<Record<string, unknown>>(`/api/storage/smart/${disk.name}/history/${filename}`)
+      const response = await fetchAtNode<Record<string, unknown>>(disk._node, disk._node_is_self, `/api/storage/smart/${disk.name}/history/${filename}`)
       const blob = new Blob([JSON.stringify(response, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -4408,11 +4414,11 @@ function HistoryTab({ disk }: { disk: DiskInfo }) {
     try {
       setViewingReport(entry.filename)
       // Fetch full SMART status from backend (same data as SMART tab uses)
-      const fullStatus = await fetchApi<SmartTestStatus>(`/api/storage/smart/${disk.name}`)
+      const fullStatus = await fetchAtNode<SmartTestStatus>(disk._node, disk._node_is_self, `/api/storage/smart/${disk.name}`)
       const attrs = fullStatus.smart_data?.attributes || []
 
       const [tempHistory] = await Promise.all([
-        fetchTempHistoryForReport(disk.name),
+        fetchTempHistoryForReport(disk.name, disk._node, disk._node_is_self),
         loadDiskTempThresholds(),
       ])
 
@@ -4573,7 +4579,7 @@ function ScheduleTab({ disk }: { disk: DiskInfo }) {
   const fetchSchedules = async () => {
     try {
       setLoading(true)
-      const data = await fetchApi<ScheduleConfig>('/api/storage/smart/schedules')
+      const data = await fetchAtNode<ScheduleConfig>(disk._node, disk._node_is_self, '/api/storage/smart/schedules')
       setConfig(data)
     } catch {
       console.error('Failed to load schedules')
@@ -4589,7 +4595,7 @@ function ScheduleTab({ disk }: { disk: DiskInfo }) {
   const handleToggleGlobal = async () => {
     try {
       setSaving(true)
-      await fetchApi('/api/storage/smart/schedules/toggle', {
+      await fetchAtNode(disk._node, disk._node_is_self, '/api/storage/smart/schedules/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !config.enabled })
@@ -4610,7 +4616,7 @@ function ScheduleTab({ disk }: { disk: DiskInfo }) {
         id: editingSchedule?.id || undefined
       }
       
-      await fetchApi('/api/storage/smart/schedules', {
+      await fetchAtNode(disk._node, disk._node_is_self, '/api/storage/smart/schedules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(scheduleData)
@@ -4630,7 +4636,7 @@ function ScheduleTab({ disk }: { disk: DiskInfo }) {
   const handleDeleteSchedule = async (id: string) => {
     try {
       setSaving(true)
-      await fetchApi(`/api/storage/smart/schedules/${id}`, {
+      await fetchAtNode(disk._node, disk._node_is_self, `/api/storage/smart/schedules/${id}`, {
         method: 'DELETE'
       })
       await fetchSchedules()
