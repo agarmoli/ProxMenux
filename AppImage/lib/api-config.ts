@@ -104,6 +104,17 @@ export function getLocalApiUrl(endpoint: string): string {
 }
 
 /**
+ * Build the path for a per-VM call routed to a specific cluster node.
+ * Local/self VM → the plain endpoint. Remote VM → the central's reverse proxy
+ * for that node. Pure string logic (no window) so it's unit-checkable.
+ */
+export function nodeEndpoint(node: string | null | undefined, isSelf: boolean | undefined, endpoint: string): string {
+  const normalized = endpoint.startsWith("/") ? endpoint : `/${endpoint}`
+  if (!node || isSelf) return normalized
+  return `/api/proxy/${encodeURIComponent(node)}${normalized}`
+}
+
+/**
  * Gets the JWT token from localStorage
  *
  * @returns JWT token or null if not authenticated
@@ -123,8 +134,28 @@ export function getAuthToken(): string | null {
  * @returns Promise with the response data
  */
 export async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const url = getApiUrl(endpoint)
+  return fetchUrl<T>(getApiUrl(endpoint), endpoint, options)
+}
 
+/**
+ * Like fetchApi but routes the call to a specific VM's node. Resolves the URL
+ * relative to the central (ignoring the global node selector), so a self VM
+ * stays local and a remote VM goes through /api/proxy/<node>.
+ */
+export async function fetchAtNode<T>(
+  node: string | null | undefined,
+  isSelf: boolean | undefined,
+  endpoint: string,
+  options?: RequestInit,
+): Promise<T> {
+  return fetchUrl<T>(getLocalApiUrl(nodeEndpoint(node, isSelf, endpoint)), endpoint, options)
+}
+
+/**
+ * Auth + error-handling core, operating on an already-resolved URL. `label`
+ * is the logical endpoint (for error messages).
+ */
+export async function fetchUrl<T>(url: string, label: string, options?: RequestInit): Promise<T> {
   const token = getAuthToken()
 
   const headers: Record<string, string> = {
@@ -167,7 +198,7 @@ export async function fetchApi<T>(endpoint: string, options?: RequestInit): Prom
             hadToken = true
           }
           if (!hadToken) {
-            throw new Error(`Unauthorized: ${endpoint}`)
+            throw new Error(`Unauthorized: ${label}`)
           }
           try {
             localStorage.removeItem("proxmenux-auth-token")
@@ -184,7 +215,7 @@ export async function fetchApi<T>(endpoint: string, options?: RequestInit): Prom
             window.location.reload()
           }
         }
-        throw new Error(`Unauthorized: ${endpoint}`)
+        throw new Error(`Unauthorized: ${label}`)
       }
       // Try to surface the backend's JSON error payload instead of a
       // bare `500 INTERNAL SERVER ERROR`. The Flask routes consistently
@@ -221,7 +252,7 @@ export async function fetchApi<T>(endpoint: string, options?: RequestInit): Prom
     try {
       return await response.json()
     } catch (jsonError) {
-      console.error("fetchApi: JSON parse error for", endpoint, "-", jsonError)
-      throw new Error(`Invalid JSON response from ${endpoint}`)
+      console.error("fetchApi: JSON parse error for", label, "-", jsonError)
+      throw new Error(`Invalid JSON response from ${label}`)
     }
 }
