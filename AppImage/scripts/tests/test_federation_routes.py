@@ -159,3 +159,17 @@ def test_federation_vms_tags_origin_node(client, monkeypatch):
     vms = client.get("/api/federation/vms").get_json()["vms"]
     by_node = {v["vmid"]: v["_node"] for v in vms}
     assert by_node == {1: "pve1", 2: "pve2"}
+
+
+def test_fetch_local_forwards_params():
+    from flask import Flask, request, jsonify
+    app = Flask(__name__)
+
+    @app.route("/echo")
+    def echo():
+        return jsonify({"limit": request.args.get("limit")})
+
+    with app.app_context():
+        out = fed._fetch_local("/echo", None, params={"limit": "5"})
+    assert out["online"] is True
+    assert out["data"] == {"limit": "5"}

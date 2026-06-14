@@ -39,17 +39,18 @@ def _self_node_name():
     return get_proxmox_node_name()
 
 
-def _fetch_local(path, incoming_auth):
+def _fetch_local(path, incoming_auth, params=None):
     """Invoke one of THIS server's own routes in-process (no socket).
 
     Reuses the browser's Authorization header (valid for the central node)
     so `require_auth` passes. Returns the same shape as peer_client.fetch_json.
+    Optional `params` dict is forwarded as query string arguments.
     """
     client = current_app.test_client()
     headers = {}
     if incoming_auth:
         headers["Authorization"] = incoming_auth
-    resp = client.get(path, headers=headers)
+    resp = client.get(path, query_string=params, headers=headers)
     data = None
     try:
         data = resp.get_json()
