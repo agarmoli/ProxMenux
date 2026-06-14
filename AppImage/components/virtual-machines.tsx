@@ -611,6 +611,7 @@ export function VirtualMachines() {
   )
 
   const [selectedVM, setSelectedVM] = useState<VMData | null>(null)
+  const [nodeFilter, setNodeFilter] = useState<string | null>(null)
   const [vmDetails, setVMDetails] = useState<VMDetails | null>(null)
   const [controlLoading, setControlLoading] = useState(false)
   // Destructive control confirmation. `Force Stop` and `Reboot` skip the OS
@@ -1055,7 +1056,9 @@ const handleDownloadLogs = async (vmid: number, vmName: string) => {
   }
 
   // Ensure vmData is always an array (backend may return object on error)
-  const safeVMData = Array.isArray(vmData) ? vmData : []
+  const allVMData = Array.isArray(vmData) ? vmData : []
+  const nodeNames = Array.from(new Set(allVMData.map((v) => v._node).filter(Boolean))) as string[]
+  const safeVMData = nodeFilter ? allVMData.filter((v) => v._node === nodeFilter) : allVMData
 
   // Render the "📦 N updates / 🛡 N security" badge next to an LXC in
   // the dashboard list. Used ONLY in the card row alongside Uptime —
@@ -1496,6 +1499,26 @@ const handleDownloadLogs = async (vmid: number, vmName: string) => {
             <div className="text-center py-8 text-muted-foreground">No virtual machines found</div>
           ) : (
             <div className="space-y-3">
+              {nodeNames.length > 1 && (
+                <div className="flex items-center gap-2 flex-wrap mb-3">
+                  <span className="text-xs text-muted-foreground">Node:</span>
+                  <button
+                    onClick={() => setNodeFilter(null)}
+                    className={`text-xs px-2 py-0.5 rounded-full border ${nodeFilter === null ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
+                  >
+                    All
+                  </button>
+                  {nodeNames.map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setNodeFilter(n)}
+                      className={`text-xs px-2 py-0.5 rounded-full border ${nodeFilter === n ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              )}
               {safeVMData.map((vm) => {
                 const cpuPercent = (vm.cpu * 100).toFixed(1)
                 const memPercent = vm.maxmem > 0 ? ((vm.mem / vm.maxmem) * 100).toFixed(1) : "0"
@@ -1522,6 +1545,11 @@ const handleDownloadLogs = async (vmid: number, vmName: string) => {
                           {typeBadge.icon}
                           {typeBadge.label}
                         </Badge>
+                        {vm._node && nodeNames.length > 1 && (
+                          <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                            <Server className="h-3 w-3 mr-1" />{vm._node}
+                          </Badge>
+                        )}
                         <div className="flex-1 min-w-0">
                           <div className="font-semibold text-foreground truncate">
                             {vm.name}
@@ -1644,6 +1672,11 @@ const handleDownloadLogs = async (vmid: number, vmName: string) => {
                         <Badge variant="outline" className={`${getTypeBadge(vm.type).color} flex-shrink-0`}>
                           {getTypeBadge(vm.type).label}
                         </Badge>
+                        {vm._node && nodeNames.length > 1 && (
+                          <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                            <Server className="h-3 w-3 mr-1" />{vm._node}
+                          </Badge>
+                        )}
 
                         {/* Name and ID */}
                         <div className="flex-1 min-w-0">
