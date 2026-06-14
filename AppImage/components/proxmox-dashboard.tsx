@@ -181,24 +181,13 @@ export function ProxmoxDashboard() {
       const uptimeValue =
         data.uptime && typeof data.uptime === "string" && data.uptime.trim() !== "" ? data.uptime : "N/A"
 
-      const backendStatus = data.health?.status?.toUpperCase() || "OK"
-      let healthStatus: "healthy" | "warning" | "critical"
-
-      if (backendStatus === "CRITICAL") {
-        healthStatus = "critical"
-      } else if (backendStatus === "WARNING") {
-        healthStatus = "warning"
-      } else {
-        healthStatus = "healthy"
-      }
-
-      setSystemStatus({
-        status: healthStatus,
+      setSystemStatus((prev) => ({
+        ...prev,
         uptime: uptimeValue,
         lastUpdate: new Date().toLocaleTimeString("en-US", { hour12: false }),
         serverName: data.hostname || "Unknown",
         nodeId: data.node_id || "Unknown",
-      })
+      }))
       setIsServerConnected(true)
       setRemoteNodeError(null)
     } catch (error) {
