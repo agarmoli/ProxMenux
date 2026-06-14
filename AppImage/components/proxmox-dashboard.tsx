@@ -18,7 +18,7 @@ import { HostBackup } from "./host-backup"
 import { OnboardingCarousel } from "./onboarding-carousel"
 import { HealthStatusModal } from "./health-status-modal"
 import { ReleaseNotesModal, useVersionCheck } from "./release-notes-modal"
-import { getApiUrl, fetchApi, getActiveNode, setActiveNode, getLocalApiUrl } from "../lib/api-config"
+import { getApiUrl, fetchApi, getActiveNode, setActiveNode, getLocalApiUrl, aggregateUrl, AggregateResponse } from "../lib/api-config"
 import { TerminalPanel } from "./terminal-panel"
 import { AvatarMenu } from "./avatar-menu"
 import { ClusterOverview } from "./cluster-overview"
@@ -139,37 +139,36 @@ export function ProxmoxDashboard() {
   }, [])
 
   // Fetch health info count independently (for initial load and refresh)
+  // Aggregates across all cluster nodes: worst status + summed info count
   const fetchHealthInfoCount = useCallback(async () => {
     try {
-      const response = await fetchApi("/api/health/full")
+      const agg = await fetchApi<AggregateResponse<{ health?: { overall?: string; details?: Record<string, { status?: string }> }; dismissed?: { category: string }[]; custom_suppressions?: { category: string }[] }>>(
+        aggregateUrl("/api/health/full"),
+      )
+      const online = (agg?.nodes ?? []).filter((n) => n.online && n.data)
+      const rank: Record<string, number> = { CRITICAL: 3, WARNING: 2, UNKNOWN: 1, OK: 0 }
+      let clusterStatus = "OK"
       let calculatedInfoCount = 0
-      
-      if (response && response.health?.details) {
-        // Get categories that have dismissed items (these become INFO)
-        const customCats = new Set((response.custom_suppressions || []).map((cs: { category: string }) => cs.category))
-        const filteredDismissed = (response.dismissed || []).filter((item: { category: string }) => !customCats.has(item.category))
+      for (const n of online) {
+        const overall = (n.data?.health?.overall || "OK").toUpperCase()
+        if ((rank[overall] ?? 0) > (rank[clusterStatus] ?? 0)) clusterStatus = overall
+        const customCats = new Set((n.data?.custom_suppressions || []).map((cs) => cs.category))
         const categoriesWithDismissed = new Set<string>()
-        filteredDismissed.forEach((item: { category: string }) => {
-          const catMeta = HEALTH_CATEGORY_KEYS.find(c => c.category === item.category || c.key === item.category)
-          if (catMeta) {
-            categoriesWithDismissed.add(catMeta.key)
-          }
+        ;(n.data?.dismissed || []).filter((item) => !customCats.has(item.category)).forEach((item) => {
+          const catMeta = HEALTH_CATEGORY_KEYS.find((c) => c.category === item.category || c.key === item.category)
+          if (catMeta) categoriesWithDismissed.add(catMeta.key)
         })
-        
-        // Count effective INFO categories (original INFO + OK categories with dismissed)
-        HEALTH_CATEGORY_KEYS.forEach(({ key }) => {
-          const cat = response.health.details[key as keyof typeof response.health.details]
-          if (cat) {
-            const originalStatus = cat.status?.toUpperCase()
-            // Count as INFO if: originally INFO OR (originally OK and has dismissed items)
-            if (originalStatus === "INFO" || (originalStatus === "OK" && categoriesWithDismissed.has(key))) {
-              calculatedInfoCount++
-            }
-          }
-        })
+        const details = n.data?.health?.details
+        if (details) {
+          HEALTH_CATEGORY_KEYS.forEach(({ key }) => {
+            const st = details[key]?.status?.toUpperCase()
+            if (st === "INFO" || (st === "OK" && categoriesWithDismissed.has(key))) calculatedInfoCount++
+          })
+        }
       }
-      
       setInfoCount(calculatedInfoCount)
+      const mapped = clusterStatus === "CRITICAL" ? "critical" : clusterStatus === "WARNING" ? "warning" : "healthy"
+      setSystemStatus((prev) => ({ ...prev, status: mapped }))
     } catch (error) {
       // Silently fail - infoCount will remain at 0
     }
