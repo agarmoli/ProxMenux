@@ -517,8 +517,8 @@ export function StorageOverview() {
     return `~${remainingYears.toFixed(1)} years`
   }
 
-  const getDiskHealthBreakdown = () => {
-    if (!storageData || !storageData.disks) {
+  const getDiskHealthBreakdown = (disks: DiskInfo[] | undefined) => {
+    if (!disks) {
       return { normal: 0, warning: 0, critical: 0 }
     }
 
@@ -526,7 +526,7 @@ export function StorageOverview() {
     let warning = 0
     let critical = 0
 
-    storageData.disks.forEach((disk) => {
+    disks.forEach((disk) => {
       if (disk.temperature === 0) {
         // No temperature reading available — count as normal so a
         // missing sensor doesn't inflate the warning count.
@@ -561,8 +561,8 @@ export function StorageOverview() {
     return { normal, warning, critical }
   }
 
-  const getDiskTypesBreakdown = () => {
-    if (!storageData || !storageData.disks) {
+  const getDiskTypesBreakdown = (disks: DiskInfo[] | undefined) => {
+    if (!disks) {
       return { nvme: 0, ssd: 0, hdd: 0, usb: 0 }
     }
 
@@ -571,7 +571,7 @@ export function StorageOverview() {
     let hdd = 0
     let usb = 0
 
-    storageData.disks.forEach((disk) => {
+    disks.forEach((disk) => {
       if (disk.connection_type === 'usb') {
         usb++
         return
@@ -629,84 +629,9 @@ export function StorageOverview() {
   // Compat bindings so existing summary/table JSX keeps compiling until later
   // tasks convert it. Tables -> merged arrays; summary -> per-node.
   const storageData = onlineNodes[0]?.storage ?? null
-  const proxmoxStorage = onlineNodes[0]?.proxmox ?? null
-  const remoteMounts = onlineNodes[0]?.mounts ?? []
-
-  const diskHealthBreakdown = getDiskHealthBreakdown()
-  const diskTypesBreakdown = getDiskTypesBreakdown()
 
   const localStorageTypes = ["dir", "lvmthin", "lvm", "zfspool", "btrfs"]
   const remoteStorageTypes = ["pbs", "nfs", "cifs", "smb", "glusterfs", "iscsi", "iscsidirect", "rbd", "cephfs"]
-
-  const totalLocalUsed =
-    proxmoxStorage?.storage
-      .filter(
-        (storage) =>
-          storage &&
-          storage.name &&
-          storage.status === "active" &&
-          storage.total > 0 &&
-          storage.used >= 0 &&
-          storage.available >= 0 &&
-          localStorageTypes.includes(storage.type.toLowerCase()),
-      )
-      .reduce((sum, storage) => sum + storage.used, 0) || 0
-
-  const totalLocalCapacity =
-    proxmoxStorage?.storage
-      .filter(
-        (storage) =>
-          storage &&
-          storage.name &&
-          storage.status === "active" &&
-          storage.total > 0 &&
-          storage.used >= 0 &&
-          storage.available >= 0 &&
-          localStorageTypes.includes(storage.type.toLowerCase()),
-      )
-      .reduce((sum, storage) => sum + storage.total, 0) || 0
-
-  const localUsagePercent = totalLocalCapacity > 0 ? ((totalLocalUsed / totalLocalCapacity) * 100).toFixed(2) : "0.00"
-
-  const totalRemoteUsed =
-    proxmoxStorage?.storage
-      .filter(
-        (storage) =>
-          storage &&
-          storage.name &&
-          storage.status === "active" &&
-          storage.total > 0 &&
-          storage.used >= 0 &&
-          storage.available >= 0 &&
-          remoteStorageTypes.includes(storage.type.toLowerCase()),
-      )
-      .reduce((sum, storage) => sum + storage.used, 0) || 0
-
-  const totalRemoteCapacity =
-    proxmoxStorage?.storage
-      .filter(
-        (storage) =>
-          storage &&
-          storage.name &&
-          storage.status === "active" &&
-          storage.total > 0 &&
-          storage.used >= 0 &&
-          storage.available >= 0 &&
-          remoteStorageTypes.includes(storage.type.toLowerCase()),
-      )
-      .reduce((sum, storage) => sum + storage.total, 0) || 0
-
-  const remoteUsagePercent =
-    totalRemoteCapacity > 0 ? ((totalRemoteUsed / totalRemoteCapacity) * 100).toFixed(2) : "0.00"
-
-  const remoteStorageCount =
-    proxmoxStorage?.storage.filter(
-      (storage) =>
-        storage &&
-        storage.name &&
-        storage.status === "active" &&
-        remoteStorageTypes.includes(storage.type.toLowerCase()),
-    ).length || 0
 
   if (loading) {
     return (
@@ -731,8 +656,113 @@ export function StorageOverview() {
 
   return (
     <div className="space-y-6">
-      {/* Storage Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 xl:gap-6">
+      {/* Filter chips */}
+      {nodeNames.length > 1 && (
+        <div className="flex items-center gap-1.5 mb-3">
+          <button
+            onClick={() => setNodeFilter(null)}
+            className={`text-xs px-2 py-0.5 rounded-full border ${nodeFilter === null ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
+          >All</button>
+          {nodeNames.map((nn) => (
+            <button
+              key={nn}
+              onClick={() => setNodeFilter(nn)}
+              className={`text-xs px-2 py-0.5 rounded-full border ${nodeFilter === nn ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
+            >{nn}</button>
+          ))}
+        </div>
+      )}
+      {/* Offline node banners */}
+      {offlineNodes.map((n) => (
+        <div key={n.node} className="flex items-center gap-2 text-xs text-muted-foreground border border-border rounded-md px-2 py-1 mb-1">
+          <AlertTriangle className="h-3 w-3 text-yellow-500" />
+          {n.node} — offline{n.error ? ` (${n.error})` : ""}
+        </div>
+      ))}
+
+      {/* Storage Summary — one grid per online node */}
+      {onlineNodes.map((n) => {
+        const totalLocalUsed =
+          n.proxmox?.storage
+            .filter(
+              (storage) =>
+                storage &&
+                storage.name &&
+                storage.status === "active" &&
+                storage.total > 0 &&
+                storage.used >= 0 &&
+                storage.available >= 0 &&
+                localStorageTypes.includes(storage.type.toLowerCase()),
+            )
+            .reduce((sum, storage) => sum + storage.used, 0) || 0
+
+        const totalLocalCapacity =
+          n.proxmox?.storage
+            .filter(
+              (storage) =>
+                storage &&
+                storage.name &&
+                storage.status === "active" &&
+                storage.total > 0 &&
+                storage.used >= 0 &&
+                storage.available >= 0 &&
+                localStorageTypes.includes(storage.type.toLowerCase()),
+            )
+            .reduce((sum, storage) => sum + storage.total, 0) || 0
+
+        const localUsagePercent = totalLocalCapacity > 0 ? ((totalLocalUsed / totalLocalCapacity) * 100).toFixed(2) : "0.00"
+
+        const totalRemoteUsed =
+          n.proxmox?.storage
+            .filter(
+              (storage) =>
+                storage &&
+                storage.name &&
+                storage.status === "active" &&
+                storage.total > 0 &&
+                storage.used >= 0 &&
+                storage.available >= 0 &&
+                remoteStorageTypes.includes(storage.type.toLowerCase()),
+            )
+            .reduce((sum, storage) => sum + storage.used, 0) || 0
+
+        const totalRemoteCapacity =
+          n.proxmox?.storage
+            .filter(
+              (storage) =>
+                storage &&
+                storage.name &&
+                storage.status === "active" &&
+                storage.total > 0 &&
+                storage.used >= 0 &&
+                storage.available >= 0 &&
+                remoteStorageTypes.includes(storage.type.toLowerCase()),
+            )
+            .reduce((sum, storage) => sum + storage.total, 0) || 0
+
+        const remoteUsagePercent =
+          totalRemoteCapacity > 0 ? ((totalRemoteUsed / totalRemoteCapacity) * 100).toFixed(2) : "0.00"
+
+        const remoteStorageCount =
+          n.proxmox?.storage.filter(
+            (storage) =>
+              storage &&
+              storage.name &&
+              storage.status === "active" &&
+              remoteStorageTypes.includes(storage.type.toLowerCase()),
+          ).length || 0
+
+        const diskHealthBreakdown = getDiskHealthBreakdown(n.storage?.disks)
+        const diskTypesBreakdown = getDiskTypesBreakdown(n.storage?.disks)
+
+        return (
+          <div key={n.node}>
+            {nodeNames.length > 1 && (
+              <div className="flex items-center gap-1.5 mb-2 text-sm font-medium">
+                <Server className="h-4 w-4 text-muted-foreground" />{n.node}{n.is_self ? " (this node)" : ""}
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 xl:gap-6">
         {/* ── Total Storage (preview restyle: headline + stacked bar Local·Remote·Free) ── */}
         {(() => {
           const totalGB = (totalLocalCapacity || 0) + (totalRemoteCapacity || 0)
@@ -755,7 +785,7 @@ export function StorageOverview() {
                         <span className="text-3xl font-bold leading-none">{usedStr.split(' ')[0]}</span>
                         <span className="text-base font-medium ml-1 text-muted-foreground">{usedStr.split(' ')[1]}</span>
                       </div>
-                      <Badge variant="outline" className="bg-muted text-muted-foreground border-border">{storageData.disk_count} disks</Badge>
+                      <Badge variant="outline" className="bg-muted text-muted-foreground border-border">{n.storage?.disk_count} disks</Badge>
                     </div>
                   )
                 })()}
@@ -893,7 +923,7 @@ export function StorageOverview() {
 
         {/* ── Physical Disks (preview restyle: headline + type strip + health badge) ── */}
         {(() => {
-          const total = Math.max(1, storageData.disk_count || 0)
+          const total = Math.max(1, n.storage?.disk_count || 0)
           const seg = 100 / total
           const allHealthy = diskHealthBreakdown.warning === 0 && diskHealthBreakdown.critical === 0
           const healthBadge = allHealthy
@@ -919,7 +949,7 @@ export function StorageOverview() {
               <CardContent>
                 <div className="flex items-end justify-between mb-3">
                   <div>
-                    <span className="text-3xl font-bold leading-none">{storageData.disk_count}</span>
+                    <span className="text-3xl font-bold leading-none">{n.storage?.disk_count}</span>
                     <span className="text-base font-medium ml-1 text-muted-foreground">disks</span>
                   </div>
                   {healthBadge}
@@ -939,7 +969,10 @@ export function StorageOverview() {
             </Card>
           )
         })()}
-      </div>
+            </div>
+          </div>
+        )
+      })}
 
       {allProxmox.length > 0 && (
         <Card>
