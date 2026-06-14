@@ -26,9 +26,10 @@ import {
   Mail,
   Menu,
   Terminal,
+  Server,
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
-import { API_PORT, fetchApi, fetchAtNode, aggregateUrl, getApiUrl, getAuthToken, type AggregateResponse, type AggregateNode } from "@/lib/api-config"
+import { API_PORT, fetchApi, fetchAtNode, nodeEndpoint, aggregateUrl, getApiUrl, getAuthToken, type AggregateResponse, type AggregateNode } from "@/lib/api-config"
 
 interface Backup {
   volid: string
@@ -274,14 +275,16 @@ export function SystemLogs() {
         // We use a direct fetch (not fetchApi) because the response is
         // text/plain — fetchApi assumes JSON and would throw on parse,
         // landing in the silent catch below. Audit residual #fetchApi-text-arg.
+        // Route to the notification's node via fetchAtNode-style URL building.
+        // fetchAtNode returns parsed JSON; since we need raw text here we build
+        // the proxied URL the same way and use a raw fetch for text/plain.
         try {
           const token = getAuthToken()
           const headers: Record<string, string> = {}
           if (token) headers["Authorization"] = `Bearer ${token}`
-          const resp = await fetch(getApiUrl(`/api/task-log/${encodeURIComponent(upid)}`), {
-            headers,
-            cache: "no-store",
-          })
+          const taskLogPath = `/api/task-log/${encodeURIComponent(upid)}`
+          const taskLogUrl = getApiUrl(nodeEndpoint(notification._node, notification._node_is_self, taskLogPath))
+          const resp = await fetch(taskLogUrl, { headers, cache: "no-store" })
           if (!resp.ok) {
             throw new Error(`task-log fetch failed: ${resp.status}`)
           }
@@ -769,6 +772,27 @@ export function SystemLogs() {
 
             {/* Logs Tab - Ahora incluye logs y eventos unificados */}
             <TabsContent value="logs" className="space-y-4 max-w-full overflow-hidden">
+              {onlineNodeNames.length > 1 && (
+                <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+                  <button
+                    onClick={() => setNodeFilter(null)}
+                    className={`text-xs px-2 py-0.5 rounded-full border ${nodeFilter === null ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
+                  >All</button>
+                  {onlineNodeNames.map((nn) => (
+                    <button
+                      key={nn}
+                      onClick={() => setNodeFilter(nn)}
+                      className={`text-xs px-2 py-0.5 rounded-full border ${nodeFilter === nn ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
+                    >{nn}</button>
+                  ))}
+                </div>
+              )}
+              {offlineNodes.map((n) => (
+                <div key={n.node} className="flex items-center gap-2 text-xs text-muted-foreground border border-border rounded-md px-2 py-1 mb-1">
+                  <AlertTriangle className="h-3 w-3 text-yellow-500" />
+                  {n.node} — offline{n.error ? ` (${n.error})` : ""}
+                </div>
+              ))}
               <div className="flex flex-col sm:flex-row gap-4 max-w-full">
                 <div className="flex-1 min-w-0">
                   <div className="relative">
@@ -844,11 +868,12 @@ export function SystemLogs() {
               <ScrollArea className="h-[600px] w-full rounded-md border border-border overflow-hidden [&>div]:!max-w-full [&>div>div]:!max-w-full">
                 <div className="space-y-2 p-4 w-full min-w-0">
                   {displayedLogs.map((log, index) => {
-                    // Generate a more stable unique key
+                    // Generate a more stable unique key (node-scoped to avoid cross-node collisions)
                     const timestampMs = new Date(log.timestamp).getTime()
+                    const nodePrefix = `${log._node ?? ""}:`
                     const uniqueKey = log.eventData
-                      ? `event-${log.eventData.upid.replace(/:/g, "-")}-${timestampMs}`
-                      : `log-${timestampMs}-${log.service?.substring(0, 10) || "unknown"}-${log.pid || "nopid"}-${index}`
+                      ? `${nodePrefix}event-${log.eventData.upid.replace(/:/g, "-")}-${timestampMs}`
+                      : `${nodePrefix}log-${timestampMs}-${log.service?.substring(0, 10) || "unknown"}-${log.pid || "nopid"}-${index}`
 
                     return (
                       <div
@@ -873,6 +898,11 @@ export function SystemLogs() {
                             <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/20">
                               <Activity className="h-3 w-3 mr-1" />
                               EVENT
+                            </Badge>
+                          )}
+                          {log._node && onlineNodeNames.length > 1 && (
+                            <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                              <Server className="h-3 w-3 mr-1" />{log._node}
                             </Badge>
                           )}
                         </div>
@@ -957,8 +987,8 @@ export function SystemLogs() {
 
               <ScrollArea className="h-[500px] w-full rounded-md border border-border">
                 <div className="space-y-2 p-4">
-                  {backups.map((backup, index) => {
-                    const uniqueKey = `backup-${backup.volid.replace(/[/:]/g, "-")}-${backup.timestamp || index}`
+                  {backups.filter((x) => !nodeFilter || x._node === nodeFilter).map((backup, index) => {
+                    const uniqueKey = `${backup._node ?? ""}:backup-${backup.volid.replace(/[/:]/g, "-")}-${backup.timestamp || index}`
 
                     return (
                       <div
@@ -982,6 +1012,11 @@ export function SystemLogs() {
                               <Badge variant="outline" className={getBackupStorageColor(backup.volid)}>
                                 {getBackupStorageLabel(backup.volid)}
                               </Badge>
+                              {backup._node && onlineNodeNames.length > 1 && (
+                                <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                                  <Server className="h-3 w-3 mr-1" />{backup._node}
+                                </Badge>
+                              )}
                             </div>
                             <Badge
                               variant="outline"
@@ -1000,7 +1035,7 @@ export function SystemLogs() {
                     )
                   })}
 
-                  {backups.length === 0 && (
+                  {backups.filter((x) => !nodeFilter || x._node === nodeFilter).length === 0 && (
                     <div className="text-center py-8 text-muted-foreground">
                       <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
                       <p>No backups found</p>
@@ -1014,9 +1049,9 @@ export function SystemLogs() {
             <TabsContent value="notifications" className="space-y-4">
               <ScrollArea className="h-[600px] w-full rounded-md border border-border">
                 <div className="space-y-2 p-4">
-                  {notifications.map((notification, index) => {
+                  {notifications.filter((x) => !nodeFilter || x._node === nodeFilter).map((notification, index) => {
                     const timestampMs = new Date(notification.timestamp).getTime()
-                    const uniqueKey = `notification-${timestampMs}-${notification.service?.substring(0, 10) || "unknown"}-${notification.source?.substring(0, 10) || "unknown"}-${index}`
+                    const uniqueKey = `${notification._node ?? ""}:notification-${timestampMs}-${notification.service?.substring(0, 10) || "unknown"}-${notification.source?.substring(0, 10) || "unknown"}-${index}`
 
                     return (
                       <div
@@ -1036,6 +1071,11 @@ export function SystemLogs() {
                             {notification.source === "journal" && <FileText className="h-3 w-3 mr-1" />}
                             {(notification.source || "unknown").toUpperCase()}
                           </Badge>
+                          {notification._node && onlineNodeNames.length > 1 && (
+                            <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                              <Server className="h-3 w-3 mr-1" />{notification._node}
+                            </Badge>
+                          )}
                         </div>
 
                         <div className="flex-1 min-w-0 overflow-hidden">
@@ -1056,7 +1096,7 @@ export function SystemLogs() {
                     )
                   })}
 
-                  {notifications.length === 0 && (
+                  {notifications.filter((x) => !nodeFilter || x._node === nodeFilter).length === 0 && (
                     <div className="text-center py-8 text-muted-foreground">
                       <Bell className="h-12 w-12 mx-auto mb-4 opacity-50" />
                       <p>No notifications found</p>
