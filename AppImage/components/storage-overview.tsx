@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { fetchApi } from "../lib/api-config"
+import { fetchApi, fetchAtNode, aggregateUrl, type AggregateResponse } from "../lib/api-config"
 import { DiskTemperatureDetailModal } from "./disk-temperature-detail-modal"
 import { DiskTemperatureCard } from "./disk-temperature-card"
 import {
@@ -55,6 +55,8 @@ interface DiskInfo {
   removable?: boolean
   is_system_disk?: boolean
   system_usage?: string[]
+  _node?: string
+  _node_is_self?: boolean
 }
 
 interface DiskObservation {
@@ -78,6 +80,8 @@ interface ZFSPool {
   allocated: string
   free: string
   health: string
+  _node?: string
+  _node_is_self?: boolean
 }
 
 interface StorageData {
@@ -102,6 +106,8 @@ interface ProxmoxStorage {
   available: number
   percent: number
   node: string // Added node property for detailed debug logging
+  _node?: string
+  _node_is_self?: boolean
 }
 
 interface ProxmoxStorageData {
@@ -132,6 +138,8 @@ interface RemoteMount {
   lxc_id?: string
   lxc_name?: string
   lxc_pid?: string
+  _node?: string
+  _node_is_self?: boolean
 }
 
 interface RemoteMountsData {
@@ -196,9 +204,10 @@ export function StorageOverview() {
   // never blocks on the network.
   const dtThresholds = useDiskTempThresholds()
 
-  const [storageData, setStorageData] = useState<StorageData | null>(null)
-  const [proxmoxStorage, setProxmoxStorage] = useState<ProxmoxStorageData | null>(null)
-  const [remoteMounts, setRemoteMounts] = useState<RemoteMount[]>([])
+  const [storageAgg, setStorageAgg] = useState<AggregateResponse<StorageData> | null>(null)
+  const [proxmoxAgg, setProxmoxAgg] = useState<AggregateResponse<ProxmoxStorageData> | null>(null)
+  const [mountsAgg, setMountsAgg] = useState<AggregateResponse<RemoteMountsData> | null>(null)
+  const [nodeFilter, setNodeFilter] = useState<string | null>(null)
   // Sprint 13.19: detail modal for a single remote mount. Tracks the
   // mount object itself rather than just an id so a stale data fetch
   // can't leave the modal showing nothing.
@@ -221,17 +230,16 @@ export function StorageOverview() {
 
   const fetchStorageData = async () => {
     try {
-      const [data, proxmoxData, mountsData] = await Promise.all([
-        fetchApi<StorageData>("/api/storage"),
-        fetchApi<ProxmoxStorageData>("/api/proxmox-storage"),
-        // Sprint 13 — host-level NFS/CIFS/SMB mounts. Wrapped in catch
-        // so a failure here doesn't blank the whole storage tab.
-        fetchApi<RemoteMountsData>("/api/mounts").catch(() => ({ mounts: [], available: false } as RemoteMountsData)),
+      const [s, p, m] = await Promise.all([
+        fetchApi<AggregateResponse<StorageData>>(aggregateUrl("/api/storage")),
+        fetchApi<AggregateResponse<ProxmoxStorageData>>(aggregateUrl("/api/proxmox-storage")),
+        fetchApi<AggregateResponse<RemoteMountsData>>(aggregateUrl("/api/mounts")).catch(
+          () => ({ path: "/api/mounts", nodes: [] } as AggregateResponse<RemoteMountsData>),
+        ),
       ])
-
-      setStorageData(data)
-      setProxmoxStorage(proxmoxData)
-      setRemoteMounts(mountsData?.mounts || [])
+      setStorageAgg(s)
+      setProxmoxAgg(p)
+      setMountsAgg(m)
     } catch (error) {
       console.error("Error fetching storage data:", error)
     } finally {
@@ -589,6 +597,40 @@ export function StorageOverview() {
     if (percent < 95) return "text-orange-500"
     return "text-red-500"
   }
+
+  // Join the three aggregator responses by node name (self is first).
+  const perNode = (storageAgg?.nodes ?? []).map((s) => {
+    const p = proxmoxAgg?.nodes.find((x) => x.node === s.node)
+    const m = mountsAgg?.nodes.find((x) => x.node === s.node)
+    return {
+      node: s.node,
+      is_self: s.is_self,
+      online: s.online,
+      error: s.error,
+      storage: s.data,
+      proxmox: (p?.data ?? null) as ProxmoxStorageData | null,
+      mounts: ((m?.data as RemoteMountsData | null)?.mounts) ?? [],
+    }
+  })
+  const onlineNodes = perNode.filter((n) => n.online && n.storage)
+  const offlineNodes = perNode.filter((n) => !n.online)
+  const nodeNames = onlineNodes.map((n) => n.node)
+
+  const tagAll = <T,>(rows: T[] | undefined, n: { node: string; is_self: boolean }): T[] =>
+    (rows ?? []).map((r) => ({ ...r, _node: n.node, _node_is_self: n.is_self }))
+  const inFilter = <T extends { _node?: string }>(rows: T[]): T[] =>
+    nodeFilter ? rows.filter((r) => r._node === nodeFilter) : rows
+
+  const allDisks = inFilter(onlineNodes.flatMap((n) => tagAll(n.storage!.disks, n)))
+  const allZfs = inFilter(onlineNodes.flatMap((n) => tagAll(n.storage!.zfs_pools, n)))
+  const allProxmox = inFilter(onlineNodes.flatMap((n) => tagAll(n.proxmox?.storage, n)))
+  const allMounts = inFilter(onlineNodes.flatMap((n) => tagAll(n.mounts, n)))
+
+  // Compat bindings so existing summary/table JSX keeps compiling until later
+  // tasks convert it. Tables -> merged arrays; summary -> per-node.
+  const storageData = onlineNodes[0]?.storage ?? null
+  const proxmoxStorage = onlineNodes[0]?.proxmox ?? null
+  const remoteMounts = onlineNodes[0]?.mounts ?? []
 
   const diskHealthBreakdown = getDiskHealthBreakdown()
   const diskTypesBreakdown = getDiskTypesBreakdown()
