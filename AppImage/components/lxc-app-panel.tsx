@@ -7,7 +7,7 @@ import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Label } from "./ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
-import { fetchApi } from "../lib/api-config"
+import { fetchApi, fetchAtNode } from "../lib/api-config"
 
 export interface AppUpdate {
   app_id?: string
@@ -53,10 +53,14 @@ export function renderAppUpdateBadge(app?: AppUpdate, compact = false, onClick?:
 /** Modal "Application" tab: shows current status + assignment form. */
 export function LxcAppPanel({
   vmid,
+  node,
+  isSelf,
   appUpdate,
   onChanged,
 }: {
   vmid: number
+  node?: string
+  isSelf?: boolean
   appUpdate?: AppUpdate
   onChanged?: () => void
 }) {
@@ -75,7 +79,7 @@ export function LxcAppPanel({
     fetchApi<{ apps: CatalogApp[] }>("/api/lxc-app-catalog")
       .then((d) => setCatalog(d.apps || []))
       .catch(() => setCatalog([]))
-    fetchApi<{ assignment: any }>(`/api/vms/${vmid}/app`)
+    fetchAtNode<{ assignment: any }>(node, isSelf, `/api/vms/${vmid}/app`)
       .then((d) => { if (d.assignment?.app_id) setAppId(d.assignment.app_id) })
       .catch(() => {})
   }, [vmid])
@@ -89,7 +93,7 @@ export function LxcAppPanel({
       body.installed = { method, value, regex }
     }
     try {
-      const res = await fetchApi<{ app_update: AppUpdate }>(`/api/vms/${vmid}/app`, {
+      const res = await fetchAtNode<{ app_update: AppUpdate }>(node, isSelf, `/api/vms/${vmid}/app`, {
         method: "POST", body: JSON.stringify(body),
       })
       setCurrent(res.app_update)
@@ -104,7 +108,7 @@ export function LxcAppPanel({
   const recheck = async () => {
     setBusy(true); setMsg(null)
     try {
-      const res = await fetchApi<{ app_update: AppUpdate }>(`/api/vms/${vmid}/app/check`, { method: "POST" })
+      const res = await fetchAtNode<{ app_update: AppUpdate }>(node, isSelf, `/api/vms/${vmid}/app/check`, { method: "POST" })
       setCurrent(res.app_update); onChanged?.()
     } catch (e) {
       setMsg((e as Error).message)
@@ -116,7 +120,7 @@ export function LxcAppPanel({
   const remove = async () => {
     setBusy(true); setMsg(null)
     try {
-      await fetchApi(`/api/vms/${vmid}/app`, { method: "DELETE" })
+      await fetchAtNode(node, isSelf, `/api/vms/${vmid}/app`, { method: "DELETE" })
       setCurrent(undefined); setAppId(""); onChanged?.()
     } finally {
       setBusy(false)

@@ -2851,6 +2851,8 @@ const handleDownloadLogs = async (vmid: number, vmName: string) => {
                 {activeModalTab === "application" && selectedVM && (
                   <LxcAppPanel
                     vmid={selectedVM.vmid}
+                    node={selectedVM._node}
+                    isSelf={selectedVM._node_is_self}
                     appUpdate={selectedVM.app_update}
                     onChanged={() => mutate()}
                   />
