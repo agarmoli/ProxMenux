@@ -256,3 +256,31 @@ export async function fetchUrl<T>(url: string, label: string, options?: RequestI
       throw new Error(`Invalid JSON response from ${label}`)
     }
 }
+
+/**
+ * Shape returned by GET /api/federation/aggregate — one entry per cluster node.
+ * `data` is the target endpoint's response for that node, verbatim (null if the
+ * node was offline). The aggregator is a dumb pipe; callers flatten per view.
+ */
+export interface AggregateNode<T> {
+  node: string
+  is_self: boolean
+  online: boolean
+  status: number | null
+  error: string | null
+  data: T | null
+}
+
+export interface AggregateResponse<T> {
+  path: string
+  nodes: AggregateNode<T>[]
+}
+
+/**
+ * Build the central-node aggregator URL for a given API path. The result starts
+ * with /api/federation, so fetchApi() never proxies it to the active node — it
+ * always hits the central node, which fans out to every peer.
+ */
+export function aggregateUrl(path: string): string {
+  return `/api/federation/aggregate?path=${encodeURIComponent(path)}`
+}
