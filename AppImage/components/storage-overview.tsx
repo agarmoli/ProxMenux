@@ -681,7 +681,7 @@ export function StorageOverview() {
       ))}
 
       {/* Storage Summary — one grid per online node */}
-      {onlineNodes.map((n) => {
+      {onlineNodes.filter((n) => !nodeFilter || n.node === nodeFilter).map((n) => {
         const totalLocalUsed =
           n.proxmox?.storage
             .filter(
