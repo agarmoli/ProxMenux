@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "apps": [
+    {
+      "id": "jellyfin",
+      "name": "Jellyfin",
+      "repo": "jellyfin/jellyfin",
+      "github_source": "releases",
+      "tag_regex": "v?(\\d+\\.\\d+\\.\\d+)",
+      "installed": { "method": "command", "value": "dpkg-query -W -f='${Version}' jellyfin-server 2>/dev/null || jellyfin --version 2>/dev/null", "regex": "(\\d+\\.\\d+\\.\\d+)" }
+    },
+    {
+      "id": "radarr",
+      "name": "Radarr",
+      "repo": "Radarr/Radarr",
+      "github_source": "releases",
+      "tag_regex": "v?(\\d+\\.\\d+\\.\\d+\\.\\d+)",
+      "installed": { "method": "file", "value": "/opt/Radarr/package_info", "regex": "PackageVersion=(\\S+)" }
+    },
+    {
+      "id": "sonarr",
+      "name": "Sonarr",
+      "repo": "Sonarr/Sonarr",
+      "github_source": "releases",
+      "tag_regex": "v?(\\d+\\.\\d+\\.\\d+\\.\\d+)",
+      "installed": { "method": "file", "value": "/opt/Sonarr/package_info", "regex": "PackageVersion=(\\S+)" }
+    },
+    {
+      "id": "prowlarr",
+      "name": "Prowlarr",
+      "repo": "Prowlarr/Prowlarr",
+      "github_source": "releases",
+      "tag_regex": "v?(\\d+\\.\\d+\\.\\d+\\.\\d+)",
+      "installed": { "method": "file", "value": "/opt/Prowlarr/package_info", "regex": "PackageVersion=(\\S+)" }
+    },
+    {
+      "id": "adguardhome",
+      "name": "AdGuard Home",
+      "repo": "AdguardTeam/AdGuardHome",
+      "github_source": "releases",
+      "tag_regex": "v(\\d+\\.\\d+\\.\\d+)",
+      "installed": { "method": "command", "value": "/opt/AdGuardHome/AdGuardHome --version 2>/dev/null", "regex": "v(\\d+\\.\\d+\\.\\d+)" }
+    },
+    {
+      "id": "vaultwarden",
+      "name": "Vaultwarden",
+      "repo": "dani-garcia/vaultwarden",
+      "github_source": "releases",
+      "tag_regex": "(\\d+\\.\\d+\\.\\d+)",
+      "installed": { "method": "command", "value": "vaultwarden --version 2>/dev/null", "regex": "(\\d+\\.\\d+\\.\\d+)" }
+    },
+    {
+      "id": "uptimekuma",
+      "name": "Uptime Kuma",
+      "repo": "louislam/uptime-kuma",
+      "github_source": "releases",
+      "tag_regex": "(\\d+\\.\\d+\\.\\d+)",
+      "installed": { "method": "command", "value": "cat /opt/uptime-kuma/package.json 2>/dev/null", "regex": "\"version\"\\s*:\\s*\"(\\d+\\.\\d+\\.\\d+)\"" }
+    },
+    {
+      "id": "gotify",
+      "name": "Gotify",
+      "repo": "gotify/server",
+      "github_source": "releases",
+      "tag_regex": "v(\\d+\\.\\d+\\.\\d+)",
+      "installed": { "method": "command", "value": "/opt/gotify/gotify-* version 2>/dev/null", "regex": "Version:?\\s*(\\d+\\.\\d+\\.\\d+)" }
+    }
+  ]
+}
