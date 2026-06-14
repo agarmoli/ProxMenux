@@ -4,11 +4,11 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Badge } from "./ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog"
-import { Wifi, Activity, Network, Router, AlertCircle, Zap, Timer } from 'lucide-react'
+import { Wifi, Activity, Network, Router, AlertCircle, Zap, Timer, Server } from 'lucide-react'
 import useSWR from "swr"
 import { NetworkTrafficChart } from "./network-traffic-chart"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
-import { fetchApi } from "../lib/api-config"
+import { fetchApi, aggregateUrl, type AggregateResponse, type AggregateNode } from "../lib/api-config"
 import { formatNetworkTraffic, getNetworkUnit } from "../lib/format-network"
 import { LatencyDetailModal } from "./latency-detail-modal"
 import { AreaChart, Area, LineChart, Line, ResponsiveContainer, YAxis } from "recharts"
@@ -75,6 +75,8 @@ interface NetworkInterface {
   vm_name?: string
   vm_type?: string
   vm_status?: string
+  _node?: string
+  _node_is_self?: boolean
 }
 
 const getInterfaceTypeBadge = (type: string) => {
@@ -138,16 +140,21 @@ const fetcher = async (url: string): Promise<NetworkData> => {
 
 export function NetworkMetrics() {
   const {
-    data: networkData,
+    data: agg,
     error,
     isLoading,
-  } = useSWR<NetworkData>("/api/network", fetcher, {
-    refreshInterval: 15000,
-    revalidateOnFocus: true,
-    revalidateOnReconnect: true,
-  })
+  } = useSWR<AggregateResponse<NetworkData>>(
+    aggregateUrl("/api/network"),
+    (url: string) => fetchApi<AggregateResponse<NetworkData>>(url),
+    {
+      refreshInterval: 15000,
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+    },
+  )
 
   const [selectedInterface, setSelectedInterface] = useState<NetworkInterface | null>(null)
+  const [nodeFilter, setNodeFilter] = useState<string | null>(null)
   const [timeframe, setTimeframe] = useState<"hour" | "day" | "week" | "month" | "year">("day")
   const [modalTimeframe, setModalTimeframe] = useState<"hour" | "day" | "week" | "month" | "year">("day")
   const [networkTotals, setNetworkTotals] = useState<{ received: number; sent: number }>({ received: 0, sent: 0 })
@@ -201,7 +208,7 @@ export function NetworkMetrics() {
     )
   }
 
-  if (error || !networkData) {
+  if (error) {
     return (
       <div className="space-y-6">
         <Card className="bg-red-500/10 border-red-500/20">
@@ -219,6 +226,31 @@ export function NetworkMetrics() {
           </CardContent>
         </Card>
       </div>
+    )
+  }
+
+  const aggNodes = agg?.nodes ?? []
+  const onlineNodes = aggNodes.filter((n) => n.online && n.data)
+  const offlineNodes = aggNodes.filter((n) => !n.online)
+  const nodeNames = aggNodes.map((n) => n.node)
+
+  const tag = (
+    list: NetworkInterface[] | undefined,
+    n: AggregateNode<NetworkData>,
+  ): NetworkInterface[] =>
+    (list ?? []).map((i) => ({ ...i, _node: n.node, _node_is_self: n.is_self }))
+
+  const applyNodeFilter = (xs: NetworkInterface[]) =>
+    nodeFilter ? xs.filter((i) => i._node === nodeFilter) : xs
+
+  const mergedPhysical = applyNodeFilter(onlineNodes.flatMap((n) => tag(n.data!.physical_interfaces, n)))
+  const mergedBridge = applyNodeFilter(onlineNodes.flatMap((n) => tag(n.data!.bridge_interfaces, n)))
+  const mergedVmLxc = applyNodeFilter(onlineNodes.flatMap((n) => tag(n.data!.vm_lxc_interfaces, n)))
+
+  const networkData = onlineNodes[0]?.data
+  if (!networkData) {
+    return (
+      <div className="text-sm text-muted-foreground p-6">No network data available.</div>
     )
   }
 
@@ -257,7 +289,7 @@ export function NetworkMetrics() {
     ...(networkData.vm_lxc_interfaces || []),
   ]
 
-  const vmLxcInterfaces = (networkData.vm_lxc_interfaces || []).sort((a, b) => {
+  const vmLxcInterfaces = [...mergedVmLxc].sort((a, b) => {
     const vmidA = a.vmid ?? Number.MAX_SAFE_INTEGER
     const vmidB = b.vmid ?? Number.MAX_SAFE_INTEGER
     return vmidA - vmidB
@@ -318,6 +350,29 @@ export function NetworkMetrics() {
 
   return (
     <div className="space-y-6">
+      {/* Node filter chips */}
+      {nodeNames.length > 1 && (
+        <div className="flex items-center gap-1.5 mb-3">
+          <button
+            onClick={() => setNodeFilter(null)}
+            className={`text-xs px-2 py-0.5 rounded-full border ${nodeFilter === null ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
+          >All</button>
+          {nodeNames.map((n) => (
+            <button
+              key={n}
+              onClick={() => setNodeFilter(n)}
+              className={`text-xs px-2 py-0.5 rounded-full border ${nodeFilter === n ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
+            >{n}</button>
+          ))}
+        </div>
+      )}
+      {/* Offline node banners */}
+      {offlineNodes.map((n) => (
+        <div key={n.node} className="flex items-center gap-2 text-xs text-muted-foreground border border-border rounded-md px-2 py-1 mb-1">
+          <AlertCircle className="h-3 w-3 text-yellow-500" />
+          {n.node} — offline{n.error ? ` (${n.error})` : ""}
+        </div>
+      ))}
       {/* Network Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 xl:gap-6">
         {/* ── Network Traffic (preview restyle: Down/Up dual headline + stacked bar) ── */}
@@ -535,16 +590,16 @@ export function NetworkMetrics() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {networkData.physical_interfaces.map((interface_, index) => {
+            {mergedPhysical.map((interface_, index) => {
               const typeBadge = getInterfaceTypeBadge(interface_.type)
 
               return (
                 <div
-                  key={index}
+                  key={`${interface_._node}:${interface_.name}`}
                   className="flex flex-col gap-3 p-4 rounded-lg border border-white/10 bg-white/5 sm:bg-card sm:hover:bg-white/5 transition-colors cursor-pointer"
                   onClick={() => setSelectedInterface(interface_)}
                 >
-                  {/* First row: Icon, Name, Type Badge, Status */}
+                  {/* First row: Icon, Name, Type Badge, Node Badge, Status */}
                   <div className="flex items-center gap-3 flex-wrap">
                     <Wifi className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
@@ -552,6 +607,11 @@ export function NetworkMetrics() {
                       <Badge variant="outline" className={typeBadge.color}>
                         {typeBadge.label}
                       </Badge>
+                      {interface_._node && nodeNames.length > 1 && (
+                        <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                          <Server className="h-3 w-3 mr-1" />{interface_._node}
+                        </Badge>
+                      )}
                     </div>
                     <Badge
                       variant="outline"
@@ -608,7 +668,7 @@ export function NetworkMetrics() {
         </CardContent>
       </Card>
 
-      {networkData.bridge_interfaces && networkData.bridge_interfaces.length > 0 && (
+      {mergedBridge.length > 0 && (
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-foreground flex items-center">
@@ -621,16 +681,16 @@ export function NetworkMetrics() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {networkData.bridge_interfaces.map((interface_, index) => {
+              {mergedBridge.map((interface_, index) => {
                 const typeBadge = getInterfaceTypeBadge(interface_.type)
 
                 return (
                   <div
-                    key={index}
+                    key={`${interface_._node}:${interface_.name}`}
                     className="flex flex-col gap-3 p-4 rounded-lg border border-white/10 bg-white/5 sm:bg-card sm:hover:bg-white/5 transition-colors cursor-pointer"
                     onClick={() => setSelectedInterface(interface_)}
                   >
-                    {/* First row: Icon, Name, Type Badge, Physical Interface (responsive), Status */}
+                    {/* First row: Icon, Name, Type Badge, Node Badge, Physical Interface (responsive), Status */}
                     <div className="flex items-center gap-3 flex-wrap">
                       <Wifi className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                       <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
@@ -638,6 +698,11 @@ export function NetworkMetrics() {
                         <Badge variant="outline" className={typeBadge.color}>
                           {typeBadge.label}
                         </Badge>
+                        {interface_._node && nodeNames.length > 1 && (
+                          <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                            <Server className="h-3 w-3 mr-1" />{interface_._node}
+                          </Badge>
+                        )}
                         {interface_.bridge_physical_interface && (
                           <div className="text-sm text-blue-500 font-medium flex items-center gap-1 flex-wrap break-all">
                             → {interface_.bridge_physical_interface}
@@ -724,7 +789,7 @@ export function NetworkMetrics() {
       )}
 
       {/* VM & LXC Network Interfaces section */}
-      {networkData.vm_lxc_interfaces && networkData.vm_lxc_interfaces.length > 0 && (
+      {mergedVmLxc.length > 0 && (
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-foreground flex items-center">
@@ -742,11 +807,11 @@ export function NetworkMetrics() {
 
                 return (
                   <div
-                    key={index}
+                    key={`${interface_._node}:${interface_.name}`}
                     className="flex flex-col gap-3 p-4 rounded-lg border border-white/10 bg-white/5 sm:bg-card sm:hover:bg-white/5 transition-colors cursor-pointer"
                     onClick={() => setSelectedInterface(interface_)}
                   >
-                    {/* First row: Icon, Name, VM/LXC Badge, VM Name, Status */}
+                    {/* First row: Icon, Name, VM/LXC Badge, Node Badge, VM Name, Status */}
                     <div className="flex items-center gap-3 flex-wrap">
                       <Wifi className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                       <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
@@ -754,6 +819,11 @@ export function NetworkMetrics() {
                         <Badge variant="outline" className={vmTypeBadge.color}>
                           {vmTypeBadge.label}
                         </Badge>
+                        {interface_._node && nodeNames.length > 1 && (
+                          <Badge variant="outline" className="flex-shrink-0 bg-muted/60 text-muted-foreground border-border">
+                            <Server className="h-3 w-3 mr-1" />{interface_._node}
+                          </Badge>
+                        )}
                         {interface_.vm_name && (
                           <div className="text-sm text-muted-foreground truncate">→ {interface_.vm_name}</div>
                         )}
