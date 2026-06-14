@@ -1,32 +1,32 @@
 Collecting apprise
   Downloading apprise-1.11.0-py3-none-any.whl (1.7 MB)
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 43.4 MB/s eta 0:00:00
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 31.9 MB/s eta 0:00:00
 Collecting requests-oauthlib
   Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl (24 kB)
 Collecting markdown
   Downloading markdown-3.10.2-py3-none-any.whl (108 kB)
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 108.2/108.2 KB 52.6 MB/s eta 0:00:00
-Collecting certifi
-  Downloading certifi-2026.5.20-py3-none-any.whl (134 kB)
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 134.1/134.1 KB 63.3 MB/s eta 0:00:00
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 108.2/108.2 KB 66.6 MB/s eta 0:00:00
 Collecting click>=5.0
   Using cached click-8.4.1-py3-none-any.whl (116 kB)
 Collecting PyYAML
   Downloading pyyaml-6.0.3-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (770 kB)
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 770.3/770.3 KB 106.9 MB/s eta 0:00:00
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 770.3/770.3 KB 144.6 MB/s eta 0:00:00
 Collecting requests
   Using cached requests-2.34.2-py3-none-any.whl (73 kB)
+Collecting certifi
+  Downloading certifi-2026.5.20-py3-none-any.whl (134 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 134.1/134.1 KB 75.8 MB/s eta 0:00:00
 Collecting idna<4,>=2.5
   Downloading idna-3.18-py3-none-any.whl (65 kB)
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 65.5/65.5 KB 35.7 MB/s eta 0:00:00
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 65.5/65.5 KB 40.3 MB/s eta 0:00:00
 Collecting charset_normalizer<4,>=2
   Downloading charset_normalizer-3.4.7-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (216 kB)
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 216.9/216.9 KB 80.9 MB/s eta 0:00:00
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 216.9/216.9 KB 45.6 MB/s eta 0:00:00
 Collecting urllib3<3,>=1.26
   Downloading urllib3-2.7.0-py3-none-any.whl (131 kB)
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 131.1/131.1 KB 58.3 MB/s eta 0:00:00
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 131.1/131.1 KB 73.4 MB/s eta 0:00:00
 Collecting oauthlib>=3.0.0
   Downloading oauthlib-3.3.1-py3-none-any.whl (160 kB)
-     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 160.1/160.1 KB 71.5 MB/s eta 0:00:00
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 160.1/160.1 KB 92.5 MB/s eta 0:00:00
 Installing collected packages: urllib3, PyYAML, oauthlib, markdown, idna, click, charset_normalizer, certifi, requests, requests-oauthlib, apprise
 Successfully installed PyYAML-6.0.3 apprise-1.11.0 certifi-2026.5.20 charset_normalizer-3.4.7 click-8.4.1 idna-3.18 markdown-3.10.2 oauthlib-3.3.1 requests-2.34.2 requests-oauthlib-2.0.0 urllib3-2.7.0
