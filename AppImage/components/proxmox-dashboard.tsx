@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
@@ -43,7 +43,6 @@ import {
   Info,
   DatabaseBackup,
   ChevronDown,
-  Layers,
 } from "lucide-react"
 import Image from "next/image"
 import { ThemeToggle } from "./theme-toggle"
@@ -110,17 +109,11 @@ export function ProxmoxDashboard() {
   const [componentKey, setComponentKey] = useState(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
-  // Tracks whether the user (or an explicit navigation) has chosen a tab.
-  // Once true, the cluster-first landing effect must NOT override the choice,
-  // even if its in-flight /api/federation/nodes fetch resolves afterwards.
-  const userPickedTabRef = useRef(false)
-  // Route ALL user-driven / programmatic tab changes through this so the
-  // landing default can't fight an explicit pick. The landing effect's own
-  // setActiveTab is left plain on purpose — that's the default, not a pick.
-  const handleTabChange = (v: string) => {
-    userPickedTabRef.current = true
-    setActiveTab(v)
-  }
+  const handleTabChange = (v: string) => setActiveTab(v)
+  // True when the federation has more than one node. Drives the Overview tab's
+  // landing view: with peers AND no node drilled in, Overview shows the
+  // all-nodes cluster cards instead of the single-node detail.
+  const [isMultiNode, setIsMultiNode] = useState(false)
   // Federation: true when the dashboard is viewing a remote cluster node
   // (read after mount to avoid a static-export hydration mismatch).
   const [isRemoteNode, setIsRemoteNode] = useState(false)
@@ -130,20 +123,11 @@ export function ProxmoxDashboard() {
   useEffect(() => {
     setIsRemoteNode(getActiveNode() !== null)
   }, [])
-  // Cluster-first landing: with peers AND no node drilled into (getActiveNode()===null)
-  // AND the user hasn't changed tabs, land on the all-nodes Cluster cards instead of the
-  // single-node Overview. getActiveNode()!=null means a node was drilled into via a Cluster
-  // card → keep Overview/detail.
+  // Detect peers so the Overview tab can show the all-nodes cluster cards on landing.
   useEffect(() => {
-    if (getActiveNode() !== null) return
     let cancelled = false
     fetchApi<{ nodes?: unknown[] }>("/api/federation/nodes")
-      .then((d) => {
-        if (cancelled) return
-        if ((d?.nodes?.length ?? 0) > 1 && !userPickedTabRef.current) {
-          setActiveTab((prev) => (prev === "overview" ? "cluster" : prev))
-        }
-      })
+      .then((d) => { if (!cancelled) setIsMultiNode((d?.nodes?.length ?? 0) > 1) })
       .catch(() => {})
     return () => { cancelled = true }
   }, [])
@@ -401,7 +385,6 @@ export function ProxmoxDashboard() {
   const getActiveTabLabel = () => {
     switch (activeTab) {
       case "overview":  return "Overview"
-      case "cluster":   return "Cluster"
       case "vms":       return "VMs & LXCs"
       case "storage":   return "Storage"
       case "network":   return "Network"
@@ -649,7 +632,6 @@ export function ProxmoxDashboard() {
               // crumb shows where you are, the chevron tells you the
               // siblings are one click away.
               const NODE_ITEMS = [
-                { value: "cluster",  label: "Cluster",  Icon: Layers,      default: false },
                 { value: "storage",  label: "Storage",  Icon: HardDrive,   default: false },
                 { value: "network",  label: "Network",  Icon: NetworkIcon, default: false },
                 { value: "hardware", label: "Hardware", Icon: Cpu,         default: false },
@@ -796,10 +778,6 @@ export function ProxmoxDashboard() {
                         <LayoutDashboard className="h-5 w-5" />
                         <span>Overview</span>
                       </Button>
-                      <Button variant="ghost" onClick={() => select("cluster")} className={itemClass(activeTab === "cluster")}>
-                        <Layers className="h-5 w-5" />
-                        <span>Cluster</span>
-                      </Button>
                       <Button variant="ghost" onClick={() => select("vms")} className={itemClass(activeTab === "vms")}>
                         <Boxes className="h-5 w-5" />
                         <span>VMs &amp; LXCs</span>
@@ -851,12 +829,12 @@ export function ProxmoxDashboard() {
 
       <div className="container mx-auto px-4 md:px-6 py-4 md:py-6">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 md:space-y-6">
-          <TabsContent value="cluster" className="space-y-4 md:space-y-6 mt-0">
-            <ClusterOverview key={`cluster-${componentKey}`} />
-          </TabsContent>
-
           <TabsContent value="overview" className="space-y-4 md:space-y-6 mt-0">
-            <SystemOverview key={`overview-${componentKey}`} />
+            {getActiveNode() === null && isMultiNode ? (
+              <ClusterOverview key={`overview-cluster-${componentKey}`} />
+            ) : (
+              <SystemOverview key={`overview-${componentKey}`} />
+            )}
           </TabsContent>
 
           <TabsContent value="storage" className="space-y-4 md:space-y-6 mt-0">
