@@ -7,6 +7,7 @@ import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Server, ArrowLeft, Cpu, MemoryStick, Thermometer, Boxes, HardDrive, Clock } from "lucide-react"
 import { SystemOverview } from "./system-overview"
+import { ClusterMetricsCharts } from "./cluster-metrics-charts"
 import { fetchApi, aggregateUrl, type AggregateResponse } from "../lib/api-config"
 import { formatStorage } from "../lib/utils"
 
@@ -132,7 +133,9 @@ export function ClusterDashboard() {
         ))}
       </div>
 
-      {/* ClusterMetricsCharts slot — added in Task 2 */}
+      {onlineNodes.length > 0 && (
+        <ClusterMetricsCharts nodes={onlineNodes.map((n) => ({ node: n.node, is_self: n.is_self }))} />
+      )}
     </div>
   )
 }
