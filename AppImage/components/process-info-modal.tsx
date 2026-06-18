@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog"
 import { ScrollArea } from "./ui/scroll-area"
 import { Activity, FileText, HardDrive, Clock, Info } from "lucide-react"
-import { fetchApi } from "@/lib/api-config"
+import { fetchAtNode } from "@/lib/api-config"
 
 interface ProcessDetail {
   pid: number
@@ -37,6 +37,8 @@ interface ProcessInfoModalProps {
   pid: number | null
   accent: { dot: string; bar: string; text: string }
   onClose: () => void
+  node?: string
+  isSelf?: boolean
 }
 
 const REFRESH_MS = 3000
@@ -74,7 +76,7 @@ const stateLabel = (state: string): string => {
   return map[letter] || state || "—"
 }
 
-export function ProcessInfoModal({ pid, accent, onClose }: ProcessInfoModalProps) {
+export function ProcessInfoModal({ pid, accent, onClose, node, isSelf }: ProcessInfoModalProps) {
   const [data, setData] = useState<ProcessDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -94,7 +96,7 @@ export function ProcessInfoModal({ pid, accent, onClose }: ProcessInfoModalProps
     if (!silent) setLoading(true)
     setError(null)
     try {
-      const res = await fetchApi<ProcessDetail>(`/api/processes/${pid}`)
+      const res = await fetchAtNode<ProcessDetail>(node, isSelf, `/api/processes/${pid}`)
       setData(res)
     } catch (e: any) {
       // 404 = the process exited while the modal was open. Expected for
@@ -125,7 +127,7 @@ export function ProcessInfoModal({ pid, accent, onClose }: ProcessInfoModalProps
     intervalRef.current = setInterval(() => fetchDetail(true), REFRESH_MS)
     return () => stopPolling()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pid])
+  }, [pid, node, isSelf])
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>

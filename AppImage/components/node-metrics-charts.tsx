@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts"
 import { Loader2, TrendingUp, MemoryStick } from "lucide-react"
 import { useIsMobile } from "../hooks/use-mobile"
-import { fetchApi } from "@/lib/api-config"
+import { fetchAtNode } from "@/lib/api-config"
 
 const TIMEFRAME_OPTIONS = [
   { value: "hour", label: "1 Hour" },
@@ -66,7 +66,12 @@ const CustomMemoryTooltip = ({ active, payload, label }: any) => {
   return null
 }
 
-export function NodeMetricsCharts() {
+interface NodeMetricsChartsProps {
+  node?: string
+  isSelf?: boolean
+}
+
+export function NodeMetricsCharts({ node, isSelf }: NodeMetricsChartsProps = {}) {
   const [timeframe, setTimeframe] = useState("day")
   const [data, setData] = useState<NodeMetricsData[]>([])
   const [loading, setLoading] = useState(true)
@@ -84,14 +89,15 @@ export function NodeMetricsCharts() {
 
   useEffect(() => {
     fetchMetrics()
-  }, [timeframe])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeframe, node, isSelf])
 
   const fetchMetrics = async () => {
     setLoading(true)
     setError(null)
 
     try {
-      const result = await fetchApi<any>(`/api/node/metrics?timeframe=${timeframe}`)
+      const result = await fetchAtNode<any>(node, isSelf, `/api/node/metrics?timeframe=${timeframe}`)
 
 
       if (!result.data || !Array.isArray(result.data)) {

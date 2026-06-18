@@ -7,7 +7,7 @@ import { Badge } from "./ui/badge"
 import { Thermometer, TrendingDown, TrendingUp, Minus } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { useIsMobile } from "../hooks/use-mobile"
-import { fetchApi } from "@/lib/api-config"
+import { fetchAtNode } from "@/lib/api-config"
 
 const TIMEFRAME_OPTIONS = [
   { value: "hour", label: "1 Hour" },
@@ -34,6 +34,8 @@ interface TemperatureDetailModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   liveTemperature?: number
+  node?: string
+  isSelf?: boolean
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -69,7 +71,7 @@ const getStatusInfo = (temp: number) => {
   return { status: "Hot", color: "bg-red-500/10 text-red-500 border-red-500/20" }
 }
 
-export function TemperatureDetailModal({ open, onOpenChange, liveTemperature }: TemperatureDetailModalProps) {
+export function TemperatureDetailModal({ open, onOpenChange, liveTemperature, node, isSelf }: TemperatureDetailModalProps) {
   const [timeframe, setTimeframe] = useState("hour")
   const [data, setData] = useState<TempHistoryPoint[]>([])
   const [stats, setStats] = useState<TempStats>({ min: 0, max: 0, avg: 0, current: 0 })
@@ -80,13 +82,14 @@ export function TemperatureDetailModal({ open, onOpenChange, liveTemperature }: 
     if (open) {
       fetchHistory()
     }
-  }, [open, timeframe])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, timeframe, node, isSelf])
 
   const fetchHistory = async () => {
     setLoading(true)
     try {
-      const result = await fetchApi<{ data: TempHistoryPoint[]; stats: TempStats }>(
-        `/api/temperature/history?timeframe=${timeframe}`
+      const result = await fetchAtNode<{ data: TempHistoryPoint[]; stats: TempStats }>(
+        node, isSelf, `/api/temperature/history?timeframe=${timeframe}`
       )
       if (result && result.data) {
         setData(result.data)

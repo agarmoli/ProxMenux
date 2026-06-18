@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "./ui/input"
 import { ScrollArea } from "./ui/scroll-area"
 import { Cpu, MemoryStick, Search } from "lucide-react"
-import { fetchApi } from "@/lib/api-config"
+import { fetchAtNode } from "@/lib/api-config"
 import { ProcessInfoModal } from "./process-info-modal"
 
 interface ProcessInfo {
@@ -37,6 +37,8 @@ interface ProcessDetailModalProps {
   onOpenChange: (open: boolean) => void
   /** Which metric the parent card represents (drives default sort + emphasis) */
   sort: "cpu" | "mem"
+  node?: string
+  isSelf?: boolean
 }
 
 const REFRESH_MS = 3000
@@ -54,7 +56,7 @@ const formatRss = (kb: number): string => {
   return `${kb} KB`
 }
 
-export function ProcessDetailModal({ open, onOpenChange, sort }: ProcessDetailModalProps) {
+export function ProcessDetailModal({ open, onOpenChange, sort, node, isSelf }: ProcessDetailModalProps) {
   const [data, setData] = useState<ProcessesResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -65,7 +67,7 @@ export function ProcessDetailModal({ open, onOpenChange, sort }: ProcessDetailMo
     if (!silent) setLoading(true)
     setError(null)
     try {
-      const res = await fetchApi<ProcessesResponse>(`/api/processes?sort=${sort}&limit=${FETCH_LIMIT}`)
+      const res = await fetchAtNode<ProcessesResponse>(node, isSelf, `/api/processes?sort=${sort}&limit=${FETCH_LIMIT}`)
       setData(res)
     } catch (e: any) {
       setError(e?.message || "Failed to fetch processes")
@@ -80,7 +82,7 @@ export function ProcessDetailModal({ open, onOpenChange, sort }: ProcessDetailMo
     const id = setInterval(() => fetchProcesses(true), REFRESH_MS)
     return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, sort])
+  }, [open, sort, node, isSelf])
 
   // Reset filter when dialog closes
   useEffect(() => {
@@ -254,6 +256,8 @@ export function ProcessDetailModal({ open, onOpenChange, sort }: ProcessDetailMo
         pid={selectedPid}
         accent={accent}
         onClose={() => setSelectedPid(null)}
+        node={node}
+        isSelf={isSelf}
       />
     </>
   )
