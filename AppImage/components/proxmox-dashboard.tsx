@@ -55,6 +55,21 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu"
 
+// Static mapping used by fetchHealthInfoCount and healthStatusUpdated listener.
+// Lives at module scope so it is allocated once and not re-created on every render.
+const HEALTH_CATEGORY_KEYS = [
+  { key: "cpu", category: "temperature" },
+  { key: "memory", category: "memory" },
+  { key: "storage", category: "storage" },
+  { key: "disks", category: "disks" },
+  { key: "network", category: "network" },
+  { key: "vms", category: "vms" },
+  { key: "services", category: "pve_services" },
+  { key: "logs", category: "logs" },
+  { key: "updates", category: "updates" },
+  { key: "security", category: "security" },
+]
+
 interface SystemStatus {
   status: "healthy" | "warning" | "critical"
   uptime: string
@@ -111,20 +126,6 @@ export function ProxmoxDashboard() {
   const [showHealthModal, setShowHealthModal] = useState(false)
   const { showReleaseNotes, setShowReleaseNotes } = useVersionCheck()
 
-  // Category keys for health info count calculation
-  const HEALTH_CATEGORY_KEYS = [
-    { key: "cpu", category: "temperature" },
-    { key: "memory", category: "memory" },
-    { key: "storage", category: "storage" },
-    { key: "disks", category: "disks" },
-    { key: "network", category: "network" },
-    { key: "vms", category: "vms" },
-    { key: "services", category: "pve_services" },
-    { key: "logs", category: "logs" },
-    { key: "updates", category: "updates" },
-    { key: "security", category: "security" },
-  ]
-
   // Fetch ProxMenux update status
   const fetchUpdateStatus = useCallback(async () => {
     try {
@@ -167,7 +168,7 @@ export function ProxmoxDashboard() {
         }
       }
       setInfoCount(calculatedInfoCount)
-      const mapped = clusterStatus === "CRITICAL" ? "critical" : clusterStatus === "WARNING" ? "warning" : "healthy"
+      const mapped = clusterStatus === "CRITICAL" ? "critical" : clusterStatus === "WARNING" || clusterStatus === "UNKNOWN" ? "warning" : "healthy"
       setSystemStatus((prev) => ({ ...prev, status: mapped }))
     } catch (error) {
       // Silently fail - infoCount will remain at 0
@@ -276,7 +277,7 @@ export function ProxmoxDashboard() {
 
       if (status === "CRITICAL") {
         healthStatus = "critical"
-      } else if (status === "WARNING") {
+      } else if (status === "WARNING" || status === "UNKNOWN") {
         healthStatus = "warning"
       } else {
         healthStatus = "healthy"
