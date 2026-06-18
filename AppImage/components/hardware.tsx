@@ -533,7 +533,7 @@ export default function Hardware() {
           {hwNodes.map((n) => (
             <button
               key={n.node}
-              onClick={() => setSelectedHwNode(n.node)}
+              onClick={() => { setSelectedHwNode(n.node); setSelectedGPU(null); setSelectedCoral(null); setSelectedPCIDevice(null); setSelectedNetwork(null); setSelectedDisk(null); setSelectedUsbDevice(null) }}
               className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${n.node === selectedNode?.node ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
             >
               <Server className="h-3 w-3" />{n.node}{n.is_self ? " (this node)" : ""}
