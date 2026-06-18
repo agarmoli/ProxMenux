@@ -44,7 +44,6 @@ export function ClusterMetricsCharts({ nodes }: { nodes: Node[] }) {
           row[`cpu_${node}`] = it.cpu != null ? Number((it.cpu * 100).toFixed(1)) : 0
           row[`mem_${node}`] = it.memtotal ? Number(((it.memused / it.memtotal) * 100).toFixed(1)) : 0
           row[`netin_${node}`] = it.netin != null ? Number((it.netin / 1024 / 1024).toFixed(2)) : 0   // MB/s
-          row[`netout_${node}`] = it.netout != null ? Number((it.netout / 1024 / 1024).toFixed(2)) : 0
         }
       }
       setRows([...byTime.values()].sort((a, b) => a.time - b.time))
