@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
@@ -110,6 +110,17 @@ export function ProxmoxDashboard() {
   const [componentKey, setComponentKey] = useState(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
+  // Tracks whether the user (or an explicit navigation) has chosen a tab.
+  // Once true, the cluster-first landing effect must NOT override the choice,
+  // even if its in-flight /api/federation/nodes fetch resolves afterwards.
+  const userPickedTabRef = useRef(false)
+  // Route ALL user-driven / programmatic tab changes through this so the
+  // landing default can't fight an explicit pick. The landing effect's own
+  // setActiveTab is left plain on purpose — that's the default, not a pick.
+  const handleTabChange = (v: string) => {
+    userPickedTabRef.current = true
+    setActiveTab(v)
+  }
   // Federation: true when the dashboard is viewing a remote cluster node
   // (read after mount to avoid a static-export hydration mismatch).
   const [isRemoteNode, setIsRemoteNode] = useState(false)
@@ -129,7 +140,7 @@ export function ProxmoxDashboard() {
     fetchApi<{ nodes?: unknown[] }>("/api/federation/nodes")
       .then((d) => {
         if (cancelled) return
-        if ((d?.nodes?.length ?? 0) > 1) {
+        if ((d?.nodes?.length ?? 0) > 1 && !userPickedTabRef.current) {
           setActiveTab((prev) => (prev === "overview" ? "cluster" : prev))
         }
       })
@@ -259,7 +270,7 @@ export function ProxmoxDashboard() {
     const handleChangeTab = (event: CustomEvent) => {
       const { tab } = event.detail
       if (tab) {
-        setActiveTab(tab)
+        handleTabChange(tab)
       }
     }
 
@@ -543,8 +554,8 @@ export function ProxmoxDashboard() {
               <div onClick={(e) => e.stopPropagation()}>
                 <AvatarMenu
                   size="lg"
-                  onOpenProfile={() => setActiveTab("profile")}
-                  onOpenSecurity={() => setActiveTab("security")}
+                  onOpenProfile={() => handleTabChange("profile")}
+                  onOpenSecurity={() => handleTabChange("security")}
                 />
               </div>
             </div>
@@ -577,8 +588,8 @@ export function ProxmoxDashboard() {
               <div onClick={(e) => e.stopPropagation()}>
                 <AvatarMenu
                   size="lg"
-                  onOpenProfile={() => setActiveTab("profile")}
-                  onOpenSecurity={() => setActiveTab("security")}
+                  onOpenProfile={() => handleTabChange("profile")}
+                  onOpenSecurity={() => handleTabChange("security")}
                 />
               </div>
             </div>
@@ -620,7 +631,7 @@ export function ProxmoxDashboard() {
           <div className="mb-3 flex justify-end">
             <NodeSelector />
           </div>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-0">
             {/* Sprint 13D nav redesign — 6 top-level slots in usage order:
                 Overview · VMs & LXCs · Node ⌄ · Backup · Terminal · Admin ⌄
                 Node groups Storage / Network / Hardware (3 sub-items).
@@ -698,7 +709,7 @@ export function ProxmoxDashboard() {
                       {NODE_ITEMS.map(({ value, label, Icon }) => (
                         <DropdownMenuItem
                           key={value}
-                          onClick={() => setActiveTab(value)}
+                          onClick={() => handleTabChange(value)}
                           className={activeTab === value ? "bg-blue-500/10 text-blue-500" : ""}
                         >
                           <Icon className="mr-2 h-4 w-4" />
@@ -732,7 +743,7 @@ export function ProxmoxDashboard() {
                       {ADMIN_ITEMS.map(({ value, label, Icon }) => (
                         <DropdownMenuItem
                           key={value}
-                          onClick={() => setActiveTab(value)}
+                          onClick={() => handleTabChange(value)}
                           className={activeTab === value ? "bg-blue-500/10 text-blue-500" : ""}
                         >
                           <Icon className="mr-2 h-4 w-4" />
@@ -766,7 +777,7 @@ export function ProxmoxDashboard() {
                   // header + nested items. Direct tabs (Overview, VMs,
                   // Backup, Terminal) sit at the top level.
                   const select = (v: string) => {
-                    setActiveTab(v)
+                    handleTabChange(v)
                     setMobileMenuOpen(false)
                   }
                   const itemClass = (active: boolean) =>
@@ -839,7 +850,7 @@ export function ProxmoxDashboard() {
       </div>
 
       <div className="container mx-auto px-4 md:px-6 py-4 md:py-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 md:space-y-6">
           <TabsContent value="cluster" className="space-y-4 md:space-y-6 mt-0">
             <ClusterOverview key={`cluster-${componentKey}`} />
           </TabsContent>
@@ -893,7 +904,7 @@ export function ProxmoxDashboard() {
           <TabsContent value="profile" className="space-y-4 md:space-y-6 mt-0">
             <Profile
               key={`profile-${componentKey}`}
-              onOpenSecurity={() => setActiveTab("security")}
+              onOpenSecurity={() => handleTabChange("security")}
             />
           </TabsContent>
 
