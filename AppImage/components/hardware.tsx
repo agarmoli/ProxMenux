@@ -400,6 +400,8 @@ export default function Hardware() {
 
   const handleSwitchModeSave = (gpuSlot: string, e: React.MouseEvent) => {
     e.stopPropagation()
+    // Script-based action runs via a local-only terminal/WebSocket — block on remote nodes.
+    if (!isSelfNode) return
     const pendingMode = pendingSwitchModes[gpuSlot]
     const gpu = hardwareData?.gpus?.find(g => g.slot === gpuSlot)
     const currentMode = gpu ? getGpuSwitchMode(gpu) : "unknown"
@@ -457,7 +459,7 @@ export default function Hardware() {
 
     const fetchRealtimeData = async () => {
       try {
-        const data = await fetchApi(`/api/gpu/${fullSlot}/realtime`)
+        const data = await fetchAtNode(selectedNode?.node, selectedNode?.is_self, `/api/gpu/${fullSlot}/realtime`)
         setRealtimeGPUData(data)
         setDetailsLoading(false)
       } catch (error) {
@@ -476,7 +478,7 @@ export default function Hardware() {
       clearInterval(interval)
       abortController.abort()
     }
-  }, [selectedGPU])
+  }, [selectedGPU, selectedNode?.node])
 
   const handleGPUClick = async (gpu: GPU) => {
     setSelectedGPU(gpu)
@@ -952,6 +954,13 @@ export default function Hardware() {
             </Badge>
           </div>
 
+          {!isSelfNode && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground border border-border rounded-md px-2 py-1 mb-3">
+              <Server className="h-3 w-3" />
+              Viewing {selectedNode?.node} (remote) — driver installs and GPU mode switch run only on the node itself. Enter the node to manage.
+            </div>
+          )}
+
           <div className="grid gap-4 lg:grid-cols-2">
             {hardwareData.gpus.map((gpu, index) => {
               const pciDevice = findPCIDeviceForGPU(gpu)
@@ -1059,7 +1068,8 @@ return (
                                 Cancel
                               </button>
                               <button
-                                className="h-7 px-3 text-xs rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center gap-1.5"
+                                disabled={!isSelfNode}
+                                className="h-7 px-3 text-xs rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   handleSwitchModeSave(fullSlot, e)
@@ -1596,6 +1606,7 @@ return (
                         {selectedGPU.vendor.toLowerCase().includes("nvidia") && (
                           <Button
                             onClick={handleInstallNvidiaDriver}
+                            disabled={!isSelfNode}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                           >
                             <>
@@ -1607,6 +1618,7 @@ return (
                         {(selectedGPU.vendor.toLowerCase().includes("amd") || selectedGPU.vendor.toLowerCase().includes("ati")) && (
                           <Button
                             onClick={handleInstallAmdTools}
+                            disabled={!isSelfNode}
                             className="w-full bg-red-600 hover:bg-red-700 text-white"
                           >
                             <>
@@ -1618,6 +1630,7 @@ return (
                         {selectedGPU.vendor.toLowerCase().includes("intel") && (
                           <Button
                             onClick={handleInstallIntelTools}
+                            disabled={!isSelfNode}
                             className="w-full bg-sky-600 hover:bg-sky-700 text-white"
                           >
                             <>
@@ -1715,6 +1728,7 @@ return (
               </div>
               <Button
                 onClick={() => setShowCoralInstaller(true)}
+                disabled={!isSelfNode}
                 className="bg-blue-600 hover:bg-blue-700 text-white shrink-0"
               >
                 <Download className="mr-2 h-4 w-4" />
@@ -1899,6 +1913,7 @@ return (
                     setSelectedCoral(null)
                     setShowCoralInstaller(true)
                   }}
+                  disabled={!isSelfNode}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 >
                   <Download className="mr-2 h-4 w-4" />
