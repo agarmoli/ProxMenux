@@ -18,7 +18,7 @@ import {
   type UsbDevice,
   fetcher as swrFetcher,
 } from "../types/hardware"
-import { fetchApi, fetchAtNode, aggregateUrl, type AggregateResponse, type AggregateNode } from "@/lib/api-config"
+import { fetchAtNode, aggregateUrl, type AggregateResponse } from "@/lib/api-config"
 import { ScriptTerminalModal } from "./script-terminal-modal"
 import { GpuSwitchModeIndicator } from "./gpu-switch-mode-indicator"
 import { Settings2, CheckCircle2 } from "lucide-react"
