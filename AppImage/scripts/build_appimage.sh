@@ -391,7 +391,7 @@ dl_pkg "ipmitool.deb"        "ipmitool"                         || true
 dl_pkg "libfreeipmi17.deb"   "libfreeipmi17"                    || true
 dl_pkg "lm-sensors.deb"      "lm-sensors"                       || true
 dl_pkg "nut-client.deb"      "nut-client"                       || true
-dl_pkg "libupsclient.deb"    "libupsclient6t64" "libupsclient6" "libupsclient5" "libupsclient4" || true
+dl_pkg "libupsclient.deb"    "libupsclient7" "libupsclient6t64" "libupsclient6" "libupsclient5" "libupsclient4" || true
 
 echo "📦 Extracting .deb packages into AppDir..."
 extracted_count=0
@@ -438,6 +438,8 @@ if [ -x "$APP_DIR/usr/bin/upsc" ] && ldd "$APP_DIR/usr/bin/upsc" | grep -q 'not 
   missing="$(ldd "$APP_DIR/usr/bin/upsc" | awk '/not found/{print $1}' | tr -d ' ')"
   echo "   missing: $missing"
   case "$missing" in
+    # Newer Ubuntu/Debian bumped the soname to .7.
+    libupsclient.so.7) need_pkgs="libupsclient7" ;;
     # Debian 13+ ships the t64 transitional package — try it first.
     libupsclient.so.6) need_pkgs="libupsclient6t64 libupsclient6" ;;
     libupsclient.so.5) need_pkgs="libupsclient5" ;;
