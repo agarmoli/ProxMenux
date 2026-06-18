@@ -65,31 +65,45 @@ Agregada sobre los nodos online. Fuentes (todas vía central, en paralelo):
   temperature, uptime), `health` (status, critical/warning counts), `vm_count`.
 - `aggregateUrl('/api/storage/summary')` → por nodo: total/used de almacenamiento.
 
-Muestra: **CPU media** (de cpu_usage), **RAM** (Σ used / Σ total + %), **guests** (Σ vm_count),
-**almacenamiento** (Σ used / Σ total), **salud peor** (rank CRITICAL>WARNING>UNKNOWN>OK, +
-suma de alertas), **N nodos online** (y cuántos offline).
+Muestra: **CPU media** (de cpu_usage), **RAM** (Σ memory_used / Σ memory_total + %), **guests**
+(Σ vm_count — combinado VM+LXC), **almacenamiento** (Σ used / Σ total), **salud peor** (rank
+CRITICAL>WARNING>UNKNOWN>OK, + suma de alertas), **N nodos online** (y cuántos offline).
+
+**⚠️ Unidades de almacenamiento:** `/api/storage/summary` devuelve `used`/`available` en **GB**
+pero `total` en **TB**. Antes de sumar, normalizar a GB: `totalGB = total * 1024`. La banda
+suma `used` (GB) y `totalGB` entre nodos y formatea con `formatStorage` (GB→TB).
 
 ## 5. Tarjetas por nodo
 
-Una por nodo online (grid responsive). De `/api/federation/overview` + las summaries agregadas
-de storage/network:
+Una por nodo online (grid responsive). De `/api/federation/overview` + la summary agregada
+de storage:
 - Cabecera: nombre + "(this node)" si self + badge online/health.
-- Métricas: **CPU% · RAM% (used/total) · Temp · guests (VM/LXC) · uptime · Red ↓/↑ · disco
-  usado/total**.
+- Métricas: **CPU% · RAM% (memory_used/memory_total) · Temp · guests (Σ vm_count, combinado
+  VM+LXC) · uptime (string ya formateado) · disco usado/total** (normalizado a GB como en §4).
 - Toda la tarjeta es clic → `setExpandedNode({node,is_self})` → detalle completo.
 - Nodo **offline** → tarjeta gris con "offline" + error; no clicable.
 
-`aggregateUrl('/api/network/summary')` aporta el ↓/↑ por nodo para las tarjetas.
+> **Sin "Red ↓/↑" en las tarjetas:** `/api/network/summary` solo da contadores acumulados
+> desde boot (no un rate), engañoso como ↓/↑. La comparación de red por nodo la cubre la
+> gráfica superpuesta de Red (§6), que usa el rate real `netin/netout` de `/api/node/metrics`.
+> Por eso el dashboard NO fetchea `/api/network/summary`.
 
 ## 6. Gráficas superpuestas (`ClusterMetricsCharts`)
 
-- 3 gráficas: **CPU %**, **RAM %**, **Red** (bytes ↓/↑). Cada una con una línea por nodo
-  (leyenda con el nombre del nodo, color estable).
-- Datos: `fetchAtNode(n.node, n.is_self, '/api/node/metrics?timeframe=<tf>')` por nodo →
-  cada respuesta es una serie temporal; se mergean por timestamp en filas
-  `{ts, cpu_<nodeA>, cpu_<nodeB>, …}` para Recharts.
-- Un solo selector de timeframe re-fetchea todas las series.
-- Si un nodo no devuelve métricas (viejo/caído), su línea se omite (las demás siguen).
+- 3 gráficas: **CPU %**, **RAM %**, **Red** (throughput). Cada una con una línea por nodo
+  (leyenda = nombre del nodo, color estable).
+- Datos: `fetchAtNode(n.node, n.is_self, '/api/node/metrics?timeframe=<token>')` por nodo.
+  La respuesta es `{node, timeframe, data: [...]}` donde `data` son puntos RRD de PVE.
+  **Formas reales (NO `{timestamp,cpu,mem,net_in/out}`):** la clave temporal es **`time`**
+  (epoch en **segundos**); `cpu` es **fracción 0-1** (×100 para %); **no hay campo de RAM%**
+  → derivar `memused/memtotal*100`; red = **`netin`/`netout`** (bytes/seg, rate ya integrado
+  por bucket). Mergear por `time` en filas `{time, cpu_<nodeA>, cpu_<nodeB>, …}` para Recharts
+  (una `<Line dataKey="cpu_<node>">` por nodo).
+- **Timeframe:** el selector muestra `1h/24h/7d/30d/1y` pero **envía** el token de API
+  `hour|day|week|month|year` (mapear como hace `system-overview.tsx` ~390-405; la API rechaza
+  otros con 400). Un solo selector re-fetchea todas las series.
+- Si un nodo no devuelve `data` (viejo/caído/array vacío), su línea se omite (las demás siguen;
+  Recharts tolera claves dispersas).
 
 ## 7. Drill-in sin reload
 
@@ -101,9 +115,9 @@ activo, `OverviewLanding` ya muestra el `SystemOverview` de ese nodo — coheren
 
 ## 8. Datos / errores / paridad
 
-- Fetches del dashboard (paralelo, vía central): `/api/federation/overview`,
-  `aggregateUrl('/api/storage/summary')`, `aggregateUrl('/api/network/summary')`; y los
-  `/api/node/metrics` por nodo dentro de `ClusterMetricsCharts`.
+- Fetches del dashboard (paralelo, vía central): `/api/federation/overview` +
+  `aggregateUrl('/api/storage/summary')`; y los `/api/node/metrics` por nodo dentro de
+  `ClusterMetricsCharts`. (Nada de `/api/network/summary` — ver §5.)
 - Refresco: la banda/tarjetas en intervalo razonable (~15-30s); los charts según su timeframe.
 - **Nodo offline** → cuenta en la banda + tarjeta gris; nunca rompe la vista.
 - **1 nodo** → `SystemOverview` normal (sin dashboard, sin charts superpuestos).
