@@ -73,7 +73,13 @@ http/https, `fetchAtNode`/`getLocalApiUrl` en `lib/api-config.ts`).
    **Cero backend.** *Hecho — plan en `docs/superpowers/plans/`. Reviews por-tarea + final
    cross-cutting OK (cazaron: ciclo de fetch, NaN months, guard de ack offline, carrera de
    status, UNKNOWN→verde). SHIP-READY. Falta gate manual.*
-5. **Hardware** apilado por nodo — *(en curso)*.
+5. ✅ **Hardware** — **picker de nodo** en la pestaña (no apilado: 3000 líneas + 6 acciones
+   de script lo hacían demasiado invasivo, y el hardware físico se mira de una máquina en una).
+   Reutiliza el render; GPU-realtime + managed-installs enrutados por `fetchAtNode`; las 6
+   acciones de script (drivers + GPU mode switch) **gated a nodo local** (terminal/WebSocket
+   no proxiable) con aviso; modales de detalle se cierran al cambiar de nodo. **Cero backend.**
+   *Hecho — plan en `docs/superpowers/plans/`. Reviews por-tarea + final OK. SHIP-READY.*
+   *(Desviación del roadmap "apilado" → picker, por riesgo + seguridad de acciones.)*
 6. **Overview combinado** como landing.
 7. **(Final) Selector global → filtro reactivo** (matar `reload`+proxy-todo).
    **Terminal** y **config por-nodo** mantienen su propio picker dentro de la pestaña.
@@ -95,8 +101,9 @@ Cada fase = brainstorm corto → spec → plan → implementar → rebuild → i
   los tabs, counts/backup-stats filtro-aware, task-log enrutado, cero backend). SHIP-READY.
 - **Fase 4 ✅:** **Health** all-nodes (header peor-estado+info sumado, modal con picker de
   nodo, acknowledge enrutado). Reviews por-tarea + final cross-cutting OK. SHIP-READY.
-- **Fase 5 (en curso):** **Hardware** apilado por nodo.
-- Las fases solo en código (frontend); falta el gate manual en nodos.
+- **Fase 5 ✅:** **Hardware** con picker de nodo (GPU-realtime enrutado, acciones de script
+  gated a local). Reviews por-tarea + final OK. SHIP-READY.
+- Las 5 fases solo en código (frontend); falta el gate manual en nodos.
 - Specs/planes en `docs/superpowers/specs|plans/`.
 
 ## Punto de arranque exacto para la próxima sesión
@@ -106,7 +113,9 @@ Cada fase = brainstorm corto → spec → plan → implementar → rebuild → i
    **Network / Storage / Logs / Health** (+ **Hardware** cuando cierre) — datos de ambos nodos;
    abrir disco/evento/nodo remoto → datos correctos; header de salud = peor del cluster; nodo
    parado "offline"; single-node idéntico a hoy. Si `./AppRun` crashea, capturar traceback.
-2. Terminar **Fase 5 (Hardware)** si quedó a medias; luego **Overview** y la **fase 7 final**
-   (selector global → filtro reactivo; resolver de paso el guard de error del central de Storage).
+2. **Fase 6 (Overview combinado)** como landing — mismo patrón (probablemente directa).
+   Luego la **fase 7 final**: selector global → filtro reactivo (matar `reload`+proxy-todo),
+   resolviendo de paso el guard de error del nodo central de Storage. Con eso el dashboard
+   queda cluster-first de punta a punta.
 
 > Nada se pierde entre sesiones: todo está commiteado en `feature/federation` y documentado aquí.
