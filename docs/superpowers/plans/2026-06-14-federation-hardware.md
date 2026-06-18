@@ -20,7 +20,7 @@
 
 **Gates (next.config ignoreBuildErrors:true → use BOTH):**
 - `cd /home/adrian/code/ProxMenux/AppImage && npm run build` must COMPLETE.
-- `npx tsc --noEmit 2>&1 | grep -c "hardware\.tsx"` — **baseline 0** (file is clean). Must stay **0**.
+- `npx tsc --noEmit 2>&1 | grep -c "hardware\.tsx"` — **baseline ≈23 pre-existing errors** (an earlier "0" was a premature read of an unfinished tsc run). Gate = do NOT introduce NEW error signatures (capture signatures before, diff after) and the build must complete. Do not fix the pre-existing 23.
 - READ the file around cited lines.
 
 **Shared (Fase 1, `lib/api-config.ts`):** `aggregateUrl(path)`, `fetchApi`, `fetchAtNode(node,isSelf,endpoint)`, types `AggregateResponse<T>`/`AggregateNode<T>`. `swrFetcher` (imported in hardware.tsx as `fetcher as swrFetcher`) is fetchApi-based and works with `aggregateUrl(...)` (which hits central, not proxied).
