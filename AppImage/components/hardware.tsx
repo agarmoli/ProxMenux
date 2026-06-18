@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Cpu, HardDrive, Thermometer, Zap, Loader2, CpuIcon, Cpu as Gpu, Network, MemoryStick, PowerIcon, FanIcon, Battery, Usb, BrainCircuit, AlertCircle } from "lucide-react"
+import { Cpu, HardDrive, Thermometer, Zap, Loader2, CpuIcon, Cpu as Gpu, Network, MemoryStick, PowerIcon, FanIcon, Battery, Usb, BrainCircuit, AlertCircle, Server } from "lucide-react"
 import { Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import useSWR from "swr"
@@ -18,7 +18,7 @@ import {
   type UsbDevice,
   fetcher as swrFetcher,
 } from "../types/hardware"
-import { fetchApi } from "@/lib/api-config"
+import { fetchApi, fetchAtNode, aggregateUrl, type AggregateResponse, type AggregateNode } from "@/lib/api-config"
 import { ScriptTerminalModal } from "./script-terminal-modal"
 import { GpuSwitchModeIndicator } from "./gpu-switch-mode-indicator"
 import { Settings2, CheckCircle2 } from "lucide-react"
@@ -214,11 +214,11 @@ export default function Hardware() {
   // modules, PCI, disks, GPU list) don't change at runtime, so no auto-refresh.
   // `mutateStatic` is triggered explicitly after GPU switch-mode changes.
   const {
-    data: staticHardwareData,
+    data: staticAgg,
     error: staticError,
     isLoading: staticLoading,
     mutate: mutateStatic,
-  } = useSWR<HardwareData>("/api/hardware", swrFetcher, {
+  } = useSWR<AggregateResponse<HardwareData>>(aggregateUrl("/api/hardware"), swrFetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     refreshInterval: 0,
@@ -227,14 +227,24 @@ export default function Hardware() {
   // Live data - only temperatures, fans, power, UPS. Polled every 5s.
   // Backend /api/hardware/live uses cached ipmitool output (10s) so this is cheap.
   const {
-    data: dynamicHardwareData,
+    data: dynamicAgg,
     error: dynamicError,
-  } = useSWR<HardwareData>("/api/hardware/live", swrFetcher, {
+  } = useSWR<AggregateResponse<HardwareData>>(aggregateUrl("/api/hardware/live"), swrFetcher, {
     refreshInterval: 5000,
     revalidateOnFocus: true,
     revalidateOnReconnect: true,
     dedupingInterval: 2000,
   })
+
+  const [selectedHwNode, setSelectedHwNode] = useState<string | null>(null)
+  const hwNodes = (staticAgg?.nodes ?? []).filter((n) => n.online && n.data)
+  const offlineHwNodes = (staticAgg?.nodes ?? []).filter((n) => !n.online)
+  const selectedNode = hwNodes.find((n) => n.node === selectedHwNode) ?? hwNodes[0] ?? null
+  const isSelfNode = selectedNode?.is_self ?? true
+
+  const staticHardwareData = selectedNode?.data ?? undefined
+  const dynamicHardwareData =
+    (dynamicAgg?.nodes.find((n) => n.node === selectedNode?.node))?.data ?? undefined
 
   // Merge: static fields from initial load, live fields from the 5s poll.
   // coral_tpus and usb_devices live in the dynamic payload so that the
@@ -286,7 +296,7 @@ export default function Hardware() {
   }>>([])
   useEffect(() => {
     let cancelled = false
-    fetchApi<{ success: boolean; items: any[] }>("/api/managed-installs")
+    fetchAtNode<{ success: boolean; items: any[] }>(selectedNode?.node, selectedNode?.is_self, "/api/managed-installs")
       .then((res) => {
         if (cancelled) return
         if (res?.success && Array.isArray(res.items)) {
@@ -295,7 +305,7 @@ export default function Hardware() {
       })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [])
+  }, [selectedNode?.node])
   const nvidiaInstall = managedInstalls.find((it) => it.type === "nvidia_xfree86")
 
   const formatLastChecked = (iso?: string | null): string => {
@@ -516,6 +526,24 @@ export default function Hardware() {
 
   return (
     <div className="space-y-6">
+      {hwNodes.length > 1 && (
+        <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+          {hwNodes.map((n) => (
+            <button
+              key={n.node}
+              onClick={() => setSelectedHwNode(n.node)}
+              className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${n.node === selectedNode?.node ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "border-border text-muted-foreground"}`}
+            >
+              <Server className="h-3 w-3" />{n.node}{n.is_self ? " (this node)" : ""}
+            </button>
+          ))}
+          {offlineHwNodes.map((n) => (
+            <span key={n.node} className="text-xs px-2 py-0.5 rounded-full border border-border text-muted-foreground opacity-60">
+              {n.node} — offline
+            </span>
+          ))}
+        </div>
+      )}
       {/* System Information - CPU & Motherboard */}
       {(hardwareData?.cpu || hardwareData?.motherboard) && (
         <Card className="border-border/50 bg-card/50 p-6">
