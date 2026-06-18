@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
-import { SystemOverview } from "./system-overview"
+import { OverviewLanding } from "./overview-landing"
 import { StorageOverview } from "./storage-overview"
 import { NetworkMetrics } from "./network-metrics"
 import { VirtualMachines } from "./virtual-machines"
@@ -21,7 +21,6 @@ import { ReleaseNotesModal, useVersionCheck } from "./release-notes-modal"
 import { getApiUrl, fetchApi, getActiveNode, setActiveNode, getLocalApiUrl, aggregateUrl, AggregateResponse } from "../lib/api-config"
 import { TerminalPanel } from "./terminal-panel"
 import { AvatarMenu } from "./avatar-menu"
-import { ClusterOverview } from "./cluster-overview"
 import { NodeSelector } from "./node-selector"
 import {
   RefreshCw,
@@ -110,10 +109,6 @@ export function ProxmoxDashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
   const handleTabChange = (v: string) => setActiveTab(v)
-  // True when the federation has more than one node. Drives the Overview tab's
-  // landing view: with peers AND no node drilled in, Overview shows the
-  // all-nodes cluster cards instead of the single-node detail.
-  const [isMultiNode, setIsMultiNode] = useState(false)
   // Federation: true when the dashboard is viewing a remote cluster node
   // (read after mount to avoid a static-export hydration mismatch).
   const [isRemoteNode, setIsRemoteNode] = useState(false)
@@ -122,14 +117,6 @@ export function ProxmoxDashboard() {
   const [remoteNodeError, setRemoteNodeError] = useState<string | null>(null)
   useEffect(() => {
     setIsRemoteNode(getActiveNode() !== null)
-  }, [])
-  // Detect peers so the Overview tab can show the all-nodes cluster cards on landing.
-  useEffect(() => {
-    let cancelled = false
-    fetchApi<{ nodes?: unknown[] }>("/api/federation/nodes")
-      .then((d) => { if (!cancelled) setIsMultiNode((d?.nodes?.length ?? 0) > 1) })
-      .catch(() => {})
-    return () => { cancelled = true }
   }, [])
   const [infoCount, setInfoCount] = useState(0)
   const [updateAvailable, setUpdateAvailable] = useState(false)
@@ -830,11 +817,7 @@ export function ProxmoxDashboard() {
       <div className="container mx-auto px-4 md:px-6 py-4 md:py-6">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 md:space-y-6">
           <TabsContent value="overview" className="space-y-4 md:space-y-6 mt-0">
-            {getActiveNode() === null && isMultiNode ? (
-              <ClusterOverview key={`overview-cluster-${componentKey}`} />
-            ) : (
-              <SystemOverview key={`overview-${componentKey}`} />
-            )}
+            <OverviewLanding key={`overview-${componentKey}`} />
           </TabsContent>
 
           <TabsContent value="storage" className="space-y-4 md:space-y-6 mt-0">

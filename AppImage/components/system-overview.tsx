@@ -10,7 +10,7 @@ import { NetworkTrafficChart } from "./network-traffic-chart"
 import { TemperatureDetailModal } from "./temperature-detail-modal"
 import { ProcessDetailModal } from "./process-detail-modal"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
-import { fetchApi } from "../lib/api-config"
+import { fetchAtNode } from "../lib/api-config"
 import { formatNetworkTraffic, getNetworkUnit } from "../lib/format-network"
 import { formatStorage } from "../lib/utils"
 import { Area, AreaChart, ResponsiveContainer } from "recharts"
@@ -110,10 +110,15 @@ interface ProxmoxStorageData {
   }>
 }
 
-const fetchSystemData = async (retries = 3, delayMs = 500): Promise<SystemData | null> => {
+const fetchSystemData = async (
+  node?: string,
+  isSelf?: boolean,
+  retries = 3,
+  delayMs = 500,
+): Promise<SystemData | null> => {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const data = await fetchApi<SystemData>("/api/system")
+      const data = await fetchAtNode<SystemData>(node, isSelf, "/api/system")
       return data
     } catch {
       if (attempt === retries - 1) {
@@ -127,9 +132,9 @@ const fetchSystemData = async (retries = 3, delayMs = 500): Promise<SystemData |
   return null
 }
 
-const fetchVMData = async (): Promise<VMData[]> => {
+const fetchVMData = async (node?: string, isSelf?: boolean): Promise<VMData[]> => {
   try {
-    const data = await fetchApi<any>("/api/vms")
+    const data = await fetchAtNode<any>(node, isSelf, "/api/vms")
     return Array.isArray(data) ? data : data.vms || []
   } catch {
     // Silent fail - API not available
@@ -137,27 +142,27 @@ const fetchVMData = async (): Promise<VMData[]> => {
   }
 }
 
-const fetchStorageData = async (): Promise<StorageData | null> => {
+const fetchStorageData = async (node?: string, isSelf?: boolean): Promise<StorageData | null> => {
   try {
-    const data = await fetchApi<StorageData>("/api/storage/summary")
+    const data = await fetchAtNode<StorageData>(node, isSelf, "/api/storage/summary")
     return data
   } catch {
     return null
   }
 }
 
-const fetchNetworkData = async (): Promise<NetworkData | null> => {
+const fetchNetworkData = async (node?: string, isSelf?: boolean): Promise<NetworkData | null> => {
   try {
-    const data = await fetchApi<NetworkData>("/api/network/summary")
+    const data = await fetchAtNode<NetworkData>(node, isSelf, "/api/network/summary")
     return data
   } catch {
     return null
   }
 }
 
-const fetchProxmoxStorageData = async (): Promise<ProxmoxStorage[] | null> => {
+const fetchProxmoxStorageData = async (node?: string, isSelf?: boolean): Promise<ProxmoxStorage[] | null> => {
   try {
-    const data = await fetchApi<ProxmoxStorage[]>("/api/proxmox-storage")
+    const data = await fetchAtNode<ProxmoxStorage[]>(node, isSelf, "/api/proxmox-storage")
     return data
   } catch {
     return null
@@ -170,7 +175,7 @@ const getUnitsSettings = (): "Bytes" | "Bits" => {
   return raw && raw.toLowerCase() === "bits" ? "Bits" : "Bytes"
 }
 
-export function SystemOverview() {
+export function SystemOverview({ node, isSelf }: { node?: string; isSelf?: boolean } = {}) {
   const [systemData, setSystemData] = useState<SystemData | null>(null)
   const [vmData, setVmData] = useState<VMData[]>([])
   const [storageData, setStorageData] = useState<StorageData | null>(null)
@@ -194,12 +199,12 @@ export function SystemOverview() {
   useEffect(() => {
     const fetchAllData = async () => {
       const [systemResult, vmResult, storageResults, networkResult] = await Promise.all([
-        fetchSystemData().finally(() => setLoadingStates((prev) => ({ ...prev, system: false }))),
-        fetchVMData().finally(() => setLoadingStates((prev) => ({ ...prev, vms: false }))),
-        Promise.all([fetchStorageData(), fetchProxmoxStorageData()]).finally(() =>
+        fetchSystemData(node, isSelf).finally(() => setLoadingStates((prev) => ({ ...prev, system: false }))),
+        fetchVMData(node, isSelf).finally(() => setLoadingStates((prev) => ({ ...prev, vms: false }))),
+        Promise.all([fetchStorageData(node, isSelf), fetchProxmoxStorageData(node, isSelf)]).finally(() =>
           setLoadingStates((prev) => ({ ...prev, storage: false })),
         ),
-        fetchNetworkData().finally(() => setLoadingStates((prev) => ({ ...prev, network: false }))),
+        fetchNetworkData(node, isSelf).finally(() => setLoadingStates((prev) => ({ ...prev, network: false }))),
       ])
 
       setHasAttemptedLoad(true)
@@ -216,7 +221,7 @@ export function SystemOverview() {
       setNetworkData(networkResult)
 
       setTimeout(async () => {
-        const refreshedSystemData = await fetchSystemData()
+        const refreshedSystemData = await fetchSystemData(node, isSelf)
         if (refreshedSystemData) {
           setSystemData(refreshedSystemData)
         }
@@ -226,23 +231,23 @@ export function SystemOverview() {
     fetchAllData()
 
     const systemInterval = setInterval(async () => {
-      const data = await fetchSystemData()
+      const data = await fetchSystemData(node, isSelf)
       if (data) setSystemData(data)
     }, 5000)
 
     const vmInterval = setInterval(async () => {
-      const data = await fetchVMData()
+      const data = await fetchVMData(node, isSelf)
       setVmData(data)
     }, 59000)
 
     const storageInterval = setInterval(async () => {
-      const [storage, proxmoxStorage] = await Promise.all([fetchStorageData(), fetchProxmoxStorageData()])
+      const [storage, proxmoxStorage] = await Promise.all([fetchStorageData(node, isSelf), fetchProxmoxStorageData(node, isSelf)])
       if (storage) setStorageData(storage)
       if (proxmoxStorage) setProxmoxStorageData(proxmoxStorage)
     }, 59000)
 
     const networkInterval = setInterval(async () => {
-      const data = await fetchNetworkData()
+      const data = await fetchNetworkData(node, isSelf)
       if (data) setNetworkData(data)
     }, 59000)
 
@@ -261,7 +266,7 @@ export function SystemOverview() {
       clearInterval(networkInterval)
       window.removeEventListener("networkUnitChanged" as any, handleUnitChange)
     }
-  }, [])
+  }, [node, isSelf])
 
   if (!hasAttemptedLoad || loadingStates.system) {
     return (
@@ -587,21 +592,27 @@ export function SystemOverview() {
         open={tempModalOpen}
         onOpenChange={setTempModalOpen}
         liveTemperature={systemData.temperature}
+        node={node}
+        isSelf={isSelf}
       />
 
       <ProcessDetailModal
         open={cpuProcModalOpen}
         onOpenChange={setCpuProcModalOpen}
         sort="cpu"
+        node={node}
+        isSelf={isSelf}
       />
 
       <ProcessDetailModal
         open={memProcModalOpen}
         onOpenChange={setMemProcModalOpen}
         sort="mem"
+        node={node}
+        isSelf={isSelf}
       />
 
-      <NodeMetricsCharts />
+      <NodeMetricsCharts node={node} isSelf={isSelf} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-card border-border">
@@ -839,6 +850,8 @@ export function SystemOverview() {
                     timeframe={networkTimeframe}
                     onTotalsCalculated={setNetworkTotals}
                     networkUnit={networkUnit}
+                    node={node}
+                    isSelf={isSelf}
                   />
                 </div>
               </div>
