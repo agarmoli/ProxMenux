@@ -80,7 +80,12 @@ http/https, `fetchAtNode`/`getLocalApiUrl` en `lib/api-config.ts`).
    no proxiable) con aviso; modales de detalle se cierran al cambiar de nodo. **Cero backend.**
    *Hecho — plan en `docs/superpowers/plans/`. Reviews por-tarea + final OK. SHIP-READY.*
    *(Desviación del roadmap "apilado" → picker, por riesgo + seguridad de acciones.)*
-6. **Overview combinado** como landing.
+6. ✅ **Overview combinado** como landing — la pestaña aterriza en las **tarjetas de todos
+   los nodos** (Cluster) cuando hay peers y no hay nodo en foco; clic en una tarjeta entra
+   al detalle de ese nodo (drill-in existente); single-node aterriza en el Overview rico de
+   siempre; tarjetas enriquecidas con uptime. **Cero backend** (mayormente wiring: la pestaña
+   por defecto se decide por `getActiveNode()`). *Hecho — plan en `docs/superpowers/plans/`.
+   Review por-tarea OK (4 escenarios trazados) + carrera de tab cerrada. SHIP-READY.*
 7. **(Final) Selector global → filtro reactivo** (matar `reload`+proxy-todo).
    **Terminal** y **config por-nodo** mantienen su propio picker dentro de la pestaña.
 
@@ -103,7 +108,9 @@ Cada fase = brainstorm corto → spec → plan → implementar → rebuild → i
   nodo, acknowledge enrutado). Reviews por-tarea + final cross-cutting OK. SHIP-READY.
 - **Fase 5 ✅:** **Hardware** con picker de nodo (GPU-realtime enrutado, acciones de script
   gated a local). Reviews por-tarea + final OK. SHIP-READY.
-- Las 5 fases solo en código (frontend); falta el gate manual en nodos.
+- **Fase 6 ✅:** **Overview** landing cluster-first (aterriza en tarjetas de todos los nodos;
+  drill-in al detalle; single-node sin cambios). Review por-tarea OK. SHIP-READY.
+- **6 de 7 fases hechas, solo código (frontend); falta el gate manual en nodos.**
 - Specs/planes en `docs/superpowers/specs|plans/`.
 
 ## Punto de arranque exacto para la próxima sesión
@@ -113,9 +120,11 @@ Cada fase = brainstorm corto → spec → plan → implementar → rebuild → i
    **Network / Storage / Logs / Health** (+ **Hardware** cuando cierre) — datos de ambos nodos;
    abrir disco/evento/nodo remoto → datos correctos; header de salud = peor del cluster; nodo
    parado "offline"; single-node idéntico a hoy. Si `./AppRun` crashea, capturar traceback.
-2. **Fase 6 (Overview combinado)** como landing — mismo patrón (probablemente directa).
-   Luego la **fase 7 final**: selector global → filtro reactivo (matar `reload`+proxy-todo),
-   resolviendo de paso el guard de error del nodo central de Storage. Con eso el dashboard
-   queda cluster-first de punta a punta.
+2. **Fase 7 — la final (la gran pieza arquitectónica):** selector global → filtro reactivo;
+   matar el `reload`+proxy-todo del que dependen hoy el drill-in (cluster cards, VMs), el
+   `getActiveNode()`-como-default de Overview, y todas las vistas. NO es "directa": merece
+   brainstorm + base validada en hardware debajo (toca el cimiento de las 6 fases). De paso,
+   resolver el guard de error del nodo central de Storage. Con eso el dashboard queda
+   cluster-first de punta a punta.
 
 > Nada se pierde entre sesiones: todo está commiteado en `feature/federation` y documentado aquí.
