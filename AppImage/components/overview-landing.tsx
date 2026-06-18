@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { SystemOverview } from "./system-overview"
+import { ClusterDashboard } from "./cluster-dashboard"
 import { fetchApi, getActiveNode } from "../lib/api-config"
-import { Server } from "lucide-react"
 
 interface FedNode {
   node: string
@@ -35,21 +35,6 @@ export function OverviewLanding() {
   // Single node (or still loading) → the normal local detail.
   if (nodes === null || online.length <= 1) return <SystemOverview />
 
-  // Multiple nodes → stack the FULL detail per node.
-  return (
-    <div className="space-y-8">
-      {online.map((n) => (
-        <section key={n.node} className="space-y-4">
-          <div className="flex items-center gap-2 border-b border-border pb-2">
-            <Server className="h-5 w-5 text-muted-foreground" />
-            <h2 className="text-lg font-semibold">
-              {n.node}
-              {n.is_self ? " (this node)" : ""}
-            </h2>
-          </div>
-          <SystemOverview node={n.node} isSelf={n.is_self} />
-        </section>
-      ))}
-    </div>
-  )
+  // Multiple nodes → cluster dashboard (summary band + per-node cards + drill-in).
+  return <ClusterDashboard />
 }
