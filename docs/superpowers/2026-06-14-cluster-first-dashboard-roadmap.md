@@ -80,14 +80,17 @@ http/https, `fetchAtNode`/`getLocalApiUrl` en `lib/api-config.ts`).
    no proxiable) con aviso; modales de detalle se cierran al cambiar de nodo. **Cero backend.**
    *Hecho — plan en `docs/superpowers/plans/`. Reviews por-tarea + final OK. SHIP-READY.*
    *(Desviación del roadmap "apilado" → picker, por riesgo + seguridad de acciones.)*
-6. ✅ **Overview combinado** como landing — la pestaña aterriza en las **tarjetas de todos
-   los nodos** (Cluster) cuando hay peers y no hay nodo en foco; clic en una tarjeta entra
-   al detalle de ese nodo (drill-in existente); single-node aterriza en el Overview rico de
-   siempre; tarjetas enriquecidas con uptime. **Cero backend** (mayormente wiring: la pestaña
-   por defecto se decide por `getActiveNode()`). *Hecho — plan en `docs/superpowers/plans/`.
-   Review por-tarea OK (4 escenarios trazados) + carrera de tab cerrada. SHIP-READY.*
+6. ⏳ **Overview cluster** — iteró: (a) default a tarjetas Cluster, (b) detalle apilado por
+   nodo (`SystemOverview` parametrizado por nodo, **construido e instalado** — commits
+   `4a63d60d`/`742fb02a`/`0f9510a9`), (c) **rediseño a dashboard de cluster** (lo que el
+   usuario quiere): banda agregada + tarjetas ricas por nodo + **gráficas superpuestas (una
+   línea por nodo)** + drill-in sin reload al `SystemOverview(node)`. **(c) DISEÑADO Y
+   PLANIFICADO, sin implementar** — spec `2026-06-14-cluster-overview-dashboard-design.md` +
+   plan `2026-06-14-cluster-overview-dashboard.md` (review Opus aplicada). **← arrancar aquí
+   la próxima sesión.** Hoy en los nodos corre la versión (b) apilada.
 7. **(Final) Selector global → filtro reactivo** (matar `reload`+proxy-todo).
    **Terminal** y **config por-nodo** mantienen su propio picker dentro de la pestaña.
+   Spec: `2026-06-14-federation-reactive-selector-design.md` (diseñado, sin implementar).
 
 Cada fase = brainstorm corto → spec → plan → implementar → rebuild → instalar.
 
@@ -108,23 +111,29 @@ Cada fase = brainstorm corto → spec → plan → implementar → rebuild → i
   nodo, acknowledge enrutado). Reviews por-tarea + final cross-cutting OK. SHIP-READY.
 - **Fase 5 ✅:** **Hardware** con picker de nodo (GPU-realtime enrutado, acciones de script
   gated a local). Reviews por-tarea + final OK. SHIP-READY.
-- **Fase 6 ✅:** **Overview** landing cluster-first (aterriza en tarjetas de todos los nodos;
-  drill-in al detalle; single-node sin cambios). Review por-tarea OK. SHIP-READY.
-- **6 de 7 fases hechas, solo código (frontend); falta el gate manual en nodos.**
+- **Fase 6 ⏳:** **Overview** — la versión apilada-por-nodo está construida e instalada en los
+  nodos; el **rediseño a dashboard de cluster** (banda + tarjetas ricas + gráficas superpuestas
+  + drill-in sin reload) está **diseñado y planificado, sin implementar** (es lo siguiente).
+- **El AppImage YA se construye en esta máquina (WSL)**: el `build_appimage.sh` se arregló
+  (añadido `libupsclient7`, había FUSE). Claude puede `build_appimage.sh` → reemplazar el
+  AppImage commiteado (`AppImage/ProxMenux-1.2.2.2-beta.AppImage`) + regenerar el `.sha256` →
+  commit + push, y el one-liner `install_proxmenux.sh` (clona la rama e instala ese AppImage
+  prebuilt, NO compila) entrega el build nuevo. **Cada cambio de código necesita rebuild+commit
+  del AppImage** para que el instalador lo sirva.
 - Specs/planes en `docs/superpowers/specs|plans/`.
 
 ## Punto de arranque exacto para la próxima sesión
 
-1. (Gate manual de Fases 1-4+) Rebuild AppImage (`AppImage/scripts/build_appimage.sh`, en un
-   nodo — necesita `libupsclient`, ausente en WSL) + instalar en los 2 nodos y comprobar
-   **Network / Storage / Logs / Health** (+ **Hardware** cuando cierre) — datos de ambos nodos;
-   abrir disco/evento/nodo remoto → datos correctos; header de salud = peor del cluster; nodo
-   parado "offline"; single-node idéntico a hoy. Si `./AppRun` crashea, capturar traceback.
-2. **Fase 7 — la final (la gran pieza arquitectónica):** selector global → filtro reactivo;
-   matar el `reload`+proxy-todo del que dependen hoy el drill-in (cluster cards, VMs), el
-   `getActiveNode()`-como-default de Overview, y todas las vistas. NO es "directa": merece
-   brainstorm + base validada en hardware debajo (toca el cimiento de las 6 fases). De paso,
-   resolver el guard de error del nodo central de Storage. Con eso el dashboard queda
-   cluster-first de punta a punta.
+1. **Implementar el dashboard de cluster Overview (Fase 6c).** Spec + plan ya escritos y
+   revisados (Opus): `docs/superpowers/specs/2026-06-14-cluster-overview-dashboard-design.md`
+   y `docs/superpowers/plans/2026-06-14-cluster-overview-dashboard.md`. 3 tareas: ClusterDashboard
+   (banda+tarjetas+drill-in) → ClusterMetricsCharts (gráficas superpuestas) → build+commit+push.
+   Ejecutar por subagentes (Opus), luego rebuild AppImage + push, reinstalar one-liner.
+   *(Único punto blando del plan: confirmar de dónde se importa `formatStorage`.)*
+2. **Fase 7 — la final:** selector global → filtro reactivo; matar el `reload`+proxy-todo del
+   que dependen el drill-in (VMs) y las superficies single-node. NO directa: spec ya escrito
+   (`2026-06-14-federation-reactive-selector-design.md`); merece base validada en hardware.
+   De paso, resolver el guard de error del nodo central de Storage.
+3. (Cuando se pueda) gate manual real en los 2 nodos de todas las vistas.
 
 > Nada se pierde entre sesiones: todo está commiteado en `feature/federation` y documentado aquí.
