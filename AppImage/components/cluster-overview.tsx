@@ -14,6 +14,7 @@ interface NodeSummary {
     cpu_usage?: number
     memory_usage?: number
     temperature?: number | { cpu?: number } | null
+    uptime?: string
   } | null
   health: {
     status?: string
@@ -117,6 +118,9 @@ export function ClusterOverview() {
                     {n.health?.status ?? "—"}
                     {alerts > 0 ? ` · ${alerts} alert(s)` : ""}
                   </div>
+                  {n.online && n.system?.uptime && (
+                    <div className="col-span-2 text-xs text-muted-foreground mt-2">Uptime: {n.system.uptime}</div>
+                  )}
                 </div>
               ) : (
                 <div className="text-sm text-red-600">{n.error || "unreachable"}</div>

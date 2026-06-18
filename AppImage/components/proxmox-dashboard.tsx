@@ -119,6 +119,23 @@ export function ProxmoxDashboard() {
   useEffect(() => {
     setIsRemoteNode(getActiveNode() !== null)
   }, [])
+  // Cluster-first landing: with peers AND no node drilled into (getActiveNode()===null)
+  // AND the user hasn't changed tabs, land on the all-nodes Cluster cards instead of the
+  // single-node Overview. getActiveNode()!=null means a node was drilled into via a Cluster
+  // card → keep Overview/detail.
+  useEffect(() => {
+    if (getActiveNode() !== null) return
+    let cancelled = false
+    fetchApi<{ nodes?: unknown[] }>("/api/federation/nodes")
+      .then((d) => {
+        if (cancelled) return
+        if ((d?.nodes?.length ?? 0) > 1) {
+          setActiveTab((prev) => (prev === "overview" ? "cluster" : prev))
+        }
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
   const [infoCount, setInfoCount] = useState(0)
   const [updateAvailable, setUpdateAvailable] = useState(false)
   const [showNavigation, setShowNavigation] = useState(true)
